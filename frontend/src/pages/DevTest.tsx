@@ -16,6 +16,8 @@ export default function DevTest() {
   const [quotesResult, setQuotesResult] = useState<unknown>(null);
   const [financialsResult, setFinancialsResult] = useState<unknown>(null);
   const [dividendsResult, setDividendsResult] = useState<unknown>(null);
+  const [historicalResult, setHistoricalResult] = useState<unknown>(null);
+  const [technicalResult, setTechnicalResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +98,34 @@ export default function DevTest() {
       const fn = httpsCallable(functions, 'manualRefreshDividends');
       const res = await fn({ symbol: '2222' });
       setDividendsResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runRefreshHistorical() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'manualRefreshHistorical');
+      const res = await fn({ symbol: '2222' });
+      setHistoricalResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runComputeTechnical() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'computeTechnicalIndicators');
+      const res = await fn({ symbol: '2222' });
+      setTechnicalResult(res.data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -227,6 +257,48 @@ export default function DevTest() {
           <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة تحديث التوزيعات:</h2>
           <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
             {JSON.stringify(dividendsResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      <hr className="my-6 border-slate-200" />
+
+      <h1 className="mb-2 text-lg font-bold">اختبار المرحلة ٤ - OHLCV والمؤشرات الفنية (2222)</h1>
+      <p className="mb-4 text-sm text-slate-500">
+        تحديث بيانات الأسعار التاريخية اليومية، ثم حساب SMA50/SMA200/RSI14 وأعلى وأدنى 52 أسبوعًا من البيانات المخزَّنة فعليًا.
+      </p>
+
+      <div className="mb-6 flex gap-3">
+        <button
+          onClick={runRefreshHistorical}
+          disabled={loading}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          تحديث OHLCV
+        </button>
+        <button
+          onClick={runComputeTechnical}
+          disabled={loading}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          حساب المؤشرات الفنية
+        </button>
+      </div>
+
+      {historicalResult !== null && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة تحديث OHLCV:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(historicalResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {technicalResult !== null && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة المؤشرات الفنية:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(technicalResult, null, 2)}
           </pre>
         </div>
       )}

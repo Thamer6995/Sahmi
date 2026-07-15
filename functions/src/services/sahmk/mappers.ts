@@ -1,5 +1,6 @@
-import { SahmkCompany, SahmkQuote, SahmkFinancialsResponse, SahmkRatiosResponse, SahmkDividendEntry } from './types';
-import { pickNumber, extractPeriodKey, detectPeriodType } from './fieldPicker';
+import { SahmkCompany, SahmkQuote, SahmkFinancialsResponse, SahmkRatiosResponse, SahmkDividendEntry, SahmkOhlcvBar } from './types';
+import { pickNumber, pickString, extractPeriodKey, detectPeriodType } from './fieldPicker';
+import { OhlcvBar } from '../../technical/types';
 
 /**
  * دوال تحويل استجابات SAHMK الخام إلى الشكل المخزَّن في Firestore حسب
@@ -187,5 +188,26 @@ export function normalizeDividendEntry(symbol: string, raw: SahmkDividendEntry):
     amountPerShare: raw.amount_per_share,
     dividendYield: raw.dividend_yield,
     status: raw.status,
+  };
+}
+
+/**
+ * يحوّل شمعة OHLCV خام إلى الشكل الموحّد المستخدم في حسابات المؤشرات
+ * الفنية وتخزين Firestore. يُعيد null إذا نقص التاريخ أو سعر الإغلاق
+ * (لا يمكن اعتبارها شمعة صالحة بدونهما).
+ */
+export function normalizeOhlcvBar(raw: SahmkOhlcvBar): OhlcvBar | null {
+  const record = raw as unknown as Record<string, unknown>;
+  const date = pickString(record, ['date', 't', 'timestamp', 'datetime']);
+  const close = pickNumber(record, ['close', 'c']);
+  if (!date || close === undefined) return null;
+
+  return {
+    date,
+    open: pickNumber(record, ['open', 'o']) ?? close,
+    high: pickNumber(record, ['high', 'h']) ?? close,
+    low: pickNumber(record, ['low', 'l']) ?? close,
+    close,
+    volume: pickNumber(record, ['volume', 'v', 'vol']) ?? 0,
   };
 }

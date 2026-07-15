@@ -15,8 +15,11 @@ export { manualRefreshQuotes } from './https/manualRefreshQuotes';
 export { manualRefreshFinancials } from './https/manualRefreshFinancials';
 export { manualRefreshDividends } from './https/manualRefreshDividends';
 
+// ---- المرحلة 4: OHLCV والمؤشرات الفنية ----
+export { manualRefreshHistorical } from './https/manualRefreshHistorical';
+export { computeTechnicalIndicators } from './https/computeTechnicalIndicators';
+
 // سيتم إضافة دوال المراحل القادمة هنا تباعًا:
-// - المرحلة 4: refreshHistorical
 // - المرحلة 5: runScoring
 // - المرحلة 6: sendTelegramAlerts, testTelegramConnection
 // - المرحلة 8: الجدولة scheduled functions
