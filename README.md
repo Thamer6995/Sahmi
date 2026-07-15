@@ -4,10 +4,11 @@
 (باقة Starter)، مع نظام تقييم استثماري (Investment Score) وإرسال تنبيهات
 عبر Telegram. التطبيق للاستخدام الشخصي فقط - حساب واحد، بدون تسجيل عام.
 
-> ⚠️ **حالة المشروع الحالية:** المرحلة الأولى فقط جاهزة (إعداد المشروع،
-> Firebase Auth، SahmkService، واختبار الاتصال بشركة أرامكو 2222).
-> المراحل 2-8 (الجلب الكامل، التقييم، Telegram، الواجهات، الجدولة والنشر)
-> ستُبنى تباعًا - راجع قسم "خارطة الطريق" أسفله.
+> ⚠️ **حالة المشروع الحالية:** المرحلتان 1 و2 جاهزتان (إعداد المشروع،
+> Firebase Auth، SahmkService، اختبار الاتصال بشركة أرامكو 2222، وتحديث
+> دليل الشركات + الأسعار بالجملة وتخزينها في Firestore).
+> المراحل 3-8 (المالية، المؤشرات الفنية، التقييم، Telegram، الواجهات،
+> الجدولة والنشر) ستُبنى تباعًا - راجع قسم "خارطة الطريق" أسفله.
 
 ---
 
@@ -63,20 +64,28 @@ Sahmi/
 ├── frontend/            React + TS + Vite (RTL)
 ├── functions/            Firebase Cloud Functions (TypeScript)
 │   └── src/
-│       ├── services/sahmk/     SahmkService + http client + cache + rate tracker
+│       ├── services/sahmk/     SahmkService + http client + cache + rate tracker + mappers
 │       ├── services/telegram/  (قادم - المرحلة 6)
 │       ├── scoring/            (قادم - المرحلة 5)
 │       ├── technical/          (قادم - المرحلة 4)
-│       ├── scheduled/          (قادم - المرحلة 8)
+│       ├── jobs/                منطق التحديث: refreshCompanies، refreshQuotes (batch + progress)
+│       ├── repo/                طبقة الكتابة/القراءة من Firestore (companies, quotes)
+│       ├── scheduled/          (قادم - المرحلة 8: تشغيل jobs/ على جدول)
 │       ├── https/              دوال Callable (اختبار/فحص/تحديث يدوي)
 │       ├── config/secrets.ts   تعريف Firebase Secrets
-│       └── utils/              auth guard, rate limit, logger (يحجب الأسرار)
+│       └── utils/              auth guard, rate limit, logger (يحجب الأسرار), batchRunner
 ├── firestore.rules
 ├── firestore.indexes.json
 ├── firebase.json
 ├── .env.example
 └── README.md
 ```
+
+> **Collections تشغيلية إضافية** غير مذكورة في المواصفة الأصلية لكن
+> ضرورية للتشغيل الفعلي: `apiUsage` (عداد الاستخدام اليومي التقريبي)
+> و`syncJobs` (تتبع تقدم كل عملية تحديث بالجملة - batch processing -
+> حتى لا يوقف فشل سهم واحد بقية العملية، وليظهر التقدم لاحقًا في لوحة
+> الإدارة).
 
 ---
 
@@ -195,7 +204,7 @@ Admin SDK).
 | المرحلة | المحتوى | الحالة |
 |---|---|---|
 | 1 | إعداد المشروع، Firebase Auth، SahmkService، اختبار شركة 2222 | ✅ جاهزة |
-| 2 | قائمة الشركات + Bulk Quotes + تخزين Firestore | ⏳ قادمة |
+| 2 | قائمة الشركات + Bulk Quotes + تخزين Firestore | ✅ جاهزة |
 | 3 | القوائم المالية + النسب + التوزيعات | ⏳ قادمة |
 | 4 | OHLCV + المؤشرات الفنية (SMA/RSI) + Unit Tests | ⏳ قادمة |
 | 5 | نظام Investment Score الكامل | ⏳ قادمة |

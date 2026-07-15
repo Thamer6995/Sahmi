@@ -12,6 +12,8 @@ import { functions } from '../lib/firebase';
 export default function DevTest() {
   const [result, setResult] = useState<unknown>(null);
   const [rawResponses, setRawResponses] = useState<unknown>(null);
+  const [companiesResult, setCompaniesResult] = useState<unknown>(null);
+  const [quotesResult, setQuotesResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +38,34 @@ export default function DevTest() {
       const fn = httpsCallable(functions, 'getDevRawResponses');
       const res = await fn({ limit: 10 });
       setRawResponses(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runRefreshCompanies() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'manualRefreshCompanies');
+      const res = await fn();
+      setCompaniesResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runRefreshQuotes() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'manualRefreshQuotes');
+      const res = await fn();
+      setQuotesResult(res.data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -79,10 +109,52 @@ export default function DevTest() {
       )}
 
       {rawResponses !== null && (
-        <div>
+        <div className="mb-6">
           <h2 className="mb-2 text-sm font-semibold text-slate-700">آخر Raw Responses المحفوظة:</h2>
           <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-amber-300" dir="ltr">
             {JSON.stringify(rawResponses, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      <hr className="my-6 border-slate-200" />
+
+      <h1 className="mb-2 text-lg font-bold">اختبار المرحلة ٢ - الشركات وBulk Quotes</h1>
+      <p className="mb-4 text-sm text-slate-500">
+        تحديث دليل الشركات كاملًا أولًا، ثم تحديث الأسعار بالجملة (Bulk Quotes) لكل الشركات المخزّنة.
+      </p>
+
+      <div className="mb-6 flex gap-3">
+        <button
+          onClick={runRefreshCompanies}
+          disabled={loading}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          تحديث الشركات
+        </button>
+        <button
+          onClick={runRefreshQuotes}
+          disabled={loading}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          تحديث الأسعار (Bulk)
+        </button>
+      </div>
+
+      {companiesResult !== null && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة تحديث الشركات:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(companiesResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {quotesResult !== null && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة تحديث الأسعار:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(quotesResult, null, 2)}
           </pre>
         </div>
       )}
