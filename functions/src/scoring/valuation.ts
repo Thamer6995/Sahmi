@@ -43,6 +43,7 @@ function computePeCheck(pe?: number, sectorAvg?: number): ScoreCheck {
       maxPoints: 10,
       available: true,
       warning: 'الشركة خاسرة أو نسبة P/E غير صالحة (سالبة) - لا تُعتبر فرصة تقييم منخفض',
+      critical: true,
     };
   }
   if (sectorAvg === undefined) {

@@ -174,6 +174,7 @@ function computePayoutRatioCheck(dividends: NormalizedDividend[], ratios?: Norma
     available: true,
     reason: points > 0 ? `نسبة تغطية التوزيعات من الأرباح ${payoutRatio.toFixed(0)}%` : undefined,
     warning,
+    critical: warning !== undefined,
   };
 }
 

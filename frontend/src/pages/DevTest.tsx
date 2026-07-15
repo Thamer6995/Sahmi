@@ -19,6 +19,8 @@ export default function DevTest() {
   const [historicalResult, setHistoricalResult] = useState<unknown>(null);
   const [technicalResult, setTechnicalResult] = useState<unknown>(null);
   const [scoreResult, setScoreResult] = useState<unknown>(null);
+  const [telegramResult, setTelegramResult] = useState<unknown>(null);
+  const [alertCheckResult, setAlertCheckResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -162,6 +164,34 @@ export default function DevTest() {
       const fn = httpsCallable(functions, 'computeInvestmentScoreBatch');
       const res = await fn({ symbols: FIVE_SECTOR_SYMBOLS });
       setScoreResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runTestTelegram() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'testTelegramConnection');
+      const res = await fn();
+      setTelegramResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runAlertCheckFor2222() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'runAlertCheck');
+      const res = await fn({ symbol: '2222' });
+      setAlertCheckResult(res.data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -368,6 +398,48 @@ export default function DevTest() {
           <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة التقييم:</h2>
           <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
             {JSON.stringify(scoreResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      <hr className="my-6 border-slate-200" />
+
+      <h1 className="mb-2 text-lg font-bold">اختبار المرحلة ٦ - Telegram والتنبيهات</h1>
+      <p className="mb-4 text-sm text-slate-500">
+        اختبار الاتصال بالبوت أولًا، ثم تشغيل فحص تنبيه كامل لسهم 2222 (تقييم + تطبيق كل قواعد التنبيه + إرسال فعلي إن تحققت الشروط).
+      </p>
+
+      <div className="mb-6 flex gap-3">
+        <button
+          onClick={runTestTelegram}
+          disabled={loading}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          اختبار اتصال Telegram
+        </button>
+        <button
+          onClick={runAlertCheckFor2222}
+          disabled={loading}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          فحص تنبيه كامل (2222)
+        </button>
+      </div>
+
+      {telegramResult !== null && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة اختبار Telegram:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(telegramResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {alertCheckResult !== null && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة فحص التنبيه:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(alertCheckResult, null, 2)}
           </pre>
         </div>
       )}

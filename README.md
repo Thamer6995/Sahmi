@@ -4,12 +4,12 @@
 (باقة Starter)، مع نظام تقييم استثماري (Investment Score) وإرسال تنبيهات
 عبر Telegram. التطبيق للاستخدام الشخصي فقط - حساب واحد، بدون تسجيل عام.
 
-> ⚠️ **حالة المشروع الحالية:** المراحل 1-5 جاهزة، بما فيها نظام
-> Investment Score الكامل (35+25+25+15 نقطة) مع استبعاد القطاع المالي،
-> Data Completeness، وعدم افتراض أي قيمة عند نقص البيانات - مع 22 اختبار
-> وحدة إجمالًا (تقنية + تقييم).
-> المراحل 6-8 (Telegram، الواجهات، الجدولة والنشر) ستُبنى تباعًا - راجع
-> قسم "خارطة الطريق" أسفله.
+> ⚠️ **حالة المشروع الحالية:** المراحل 1-6 جاهزة: كامل خط جلب البيانات
+> من SAHMK، نظام Investment Score (100 نقطة)، وتكامل Telegram الكامل
+> (قواعد التنبيه الستة، Cooldown 7 أيام، رسالة منسّقة بدون أي صيغة توصية
+> شراء) - مع 29 اختبار وحدة إجمالًا.
+> المراحل 7-8 (الواجهات الكاملة، الجدولة والنشر) ستُبنى تباعًا - راجع قسم
+> "خارطة الطريق" أسفله.
 
 ---
 
@@ -80,14 +80,15 @@ Sahmi/
 ├── functions/            Firebase Cloud Functions (TypeScript)
 │   └── src/
 │       ├── services/sahmk/     SahmkService + http client + cache + rate tracker + mappers
-│       ├── services/telegram/  (قادم - المرحلة 6)
-│       ├── scoring/            (قادم - المرحلة 5)
-│       ├── technical/          (قادم - المرحلة 4)
-│       ├── jobs/                منطق التحديث: refreshCompanies، refreshQuotes (batch + progress)
-│       ├── repo/                طبقة الكتابة/القراءة من Firestore (companies, quotes)
+│       ├── services/telegram/  TelegramService + messageBuilder (بدون أي صيغة توصية شراء)
+│       ├── scoring/            نظام Investment Score الكامل (quality/valuation/dividend/technical)
+│       ├── alerts/             alertTier + evaluateAlert (قواعد التنبيه الستة والـ Cooldown)
+│       ├── technical/          SMA/RSI/52-week + اختبارات وحدة
+│       ├── jobs/                منطق التحديث والتقييم والتنبيه (batch + progress)
+│       ├── repo/                طبقة الكتابة/القراءة من Firestore (كل الـ collections)
 │       ├── scheduled/          (قادم - المرحلة 8: تشغيل jobs/ على جدول)
 │       ├── https/              دوال Callable (اختبار/فحص/تحديث يدوي)
-│       ├── config/secrets.ts   تعريف Firebase Secrets
+│       ├── config/secrets.ts   تعريف Firebase Secrets والقيم غير الحساسة
 │       └── utils/              auth guard, rate limit, logger (يحجب الأسرار), batchRunner
 ├── firestore.rules
 ├── firestore.indexes.json
@@ -101,6 +102,13 @@ Sahmi/
 > و`syncJobs` (تتبع تقدم كل عملية تحديث بالجملة - batch processing -
 > حتى لا يوقف فشل سهم واحد بقية العملية، وليظهر التقدم لاحقًا في لوحة
 > الإدارة).
+>
+> **إعدادات Backend الافتراضية** (قبل بناء صفحة الإعدادات في المرحلة 7):
+> `minimumAlertScore=80`، `alertCooldownDays=7`، `telegramEnabled=true`
+> (`functions/src/repo/settingsRepo.ts`) - تُقرأ من مستند `settings/app`
+> إن وُجد، وإلا تُستخدم هذه القيم الافتراضية تلقائيًا. حقل `alerts.telegramMessageId`
+> إضافة غير مذكورة صراحة في المواصفة لكنها تُلبّي متطلب "تسجيل Telegram
+> message ID إن أمكن".
 
 ---
 
@@ -158,6 +166,11 @@ DEV_MODE=true
 
 اجعل `DEV_MODE=false` (أو احذف المتغير) قبل أي نشر للإنتاج.
 
+`APP_URL` (رابط زر "فتح السهم في التطبيق" داخل رسائل Telegram) وباقي
+القيم غير الحساسة (`SAHMK_BASE_URL`, `APP_TIMEZONE`) تُضبط بنفس الطريقة
+في `functions/.env` (للتطوير) أو `functions/.env.<project-id>` (للإنتاج
+عند النشر) - وليست أسرارًا فيُكتبان مباشرة، بخلاف SAHMK_API_KEY/TELEGRAM_*.
+
 ---
 
 ## 5. أين أضع كل سر؟
@@ -168,6 +181,7 @@ DEV_MODE=true
 | `TELEGRAM_BOT_TOKEN` | Firebase Secret | نفس الطريقة، يُستخدم في TelegramService (Backend فقط) |
 | `TELEGRAM_CHAT_ID` | Firebase Secret | نفس الطريقة |
 | `VITE_FIREBASE_*` | `frontend/.env.local` | معرّفات Firebase العلنية فقط (ليست أسرارًا حساسة) |
+| `APP_URL` | `functions/.env` أو `functions/.env.<project-id>` (غير سرّي) | يُستخدم فقط لبناء رابط زر Telegram |
 
 **لا يوجد أي مفتاح API أو توكن Telegram في كود الـ Frontend أو في أي ملف
 يُنشر للمتصفح.**
@@ -226,7 +240,7 @@ Admin SDK).
 | 3 | القوائم المالية + النسب + التوزيعات | ✅ جاهزة |
 | 4 | OHLCV + المؤشرات الفنية (SMA/RSI) + Unit Tests | ✅ جاهزة |
 | 5 | نظام Investment Score الكامل | ✅ جاهزة |
-| 6 | تكامل Telegram والتنبيهات | ⏳ قادمة |
+| 6 | تكامل Telegram والتنبيهات | ✅ جاهزة |
 | 7 | واجهات التطبيق الكاملة (لوحة تحكم، مستكشف، صفحة سهم...) | ⏳ قادمة |
 | 8 | الجدولة (Scheduled Functions) والنشر النهائي | ⏳ قادمة |
 

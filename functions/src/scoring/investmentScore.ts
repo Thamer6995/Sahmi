@@ -20,6 +20,10 @@ export interface InvestmentScoreResult {
   reasons: string[];
   warnings: string[];
   missingData: string[];
+  /** هل آخر فترة سنوية متاحة كانت مربحة؟ undefined إن لم تتوفر بيانات - يُستخدم في قواعد التنبيه (شرط 3). */
+  latestYearProfitable?: boolean;
+  /** هل يوجد تحذير مالي حرج (وليس فنيًا) ضمن الجودة/التقييم/التوزيعات - يمنع إرسال أي تنبيه (شرط 4). */
+  hasCriticalFinancialWarning: boolean;
   calculatedAt: string;
 }
 
@@ -56,6 +60,7 @@ export function computeInvestmentScore(inputs: InvestmentScoreInputs): Investmen
       reasons: [],
       warnings: [],
       missingData: [],
+      hasCriticalFinancialWarning: false,
       calculatedAt,
     };
   }
@@ -79,6 +84,12 @@ export function computeInvestmentScore(inputs: InvestmentScoreInputs): Investmen
   const availableCount = allChecks.filter((c) => c.available).length;
   const dataCompleteness = allChecks.length > 0 ? (availableCount / allChecks.length) * 100 : 0;
 
+  const financialChecks = [...quality.checks, ...valuation.checks, ...dividend.checks];
+  const hasCriticalFinancialWarning = financialChecks.some((c) => c.critical && c.warning);
+
+  const lastAnnualNetIncome = [...inputs.annualFinancials].reverse().find((p) => p.netIncome !== undefined)?.netIncome;
+  const latestYearProfitable = lastAnnualNetIncome !== undefined ? lastAnnualNetIncome > 0 : undefined;
+
   return {
     symbol: inputs.symbol,
     excluded: false,
@@ -91,6 +102,8 @@ export function computeInvestmentScore(inputs: InvestmentScoreInputs): Investmen
     reasons: allChecks.filter((c) => c.reason).map((c) => c.reason as string),
     warnings: allChecks.filter((c) => c.warning).map((c) => c.warning as string),
     missingData: allChecks.filter((c) => c.missingDataNote).map((c) => c.missingDataNote as string),
+    latestYearProfitable,
+    hasCriticalFinancialWarning,
     calculatedAt,
   };
 }

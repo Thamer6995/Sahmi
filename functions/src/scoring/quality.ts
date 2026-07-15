@@ -49,6 +49,7 @@ function computePositiveNetIncomeCheck(periods: NormalizedFinancialPeriod[]): Sc
     available: true,
     reason: allPositive ? 'أرباح موجبة في كل السنوات المتاحة' : undefined,
     warning: allPositive ? undefined : 'صافي الربح كان سالبًا في إحدى السنوات المتاحة على الأقل',
+    critical: !allPositive,
   };
 }
 
@@ -121,6 +122,7 @@ function computeOperatingCashFlowCheck(periods: NormalizedFinancialPeriod[]): Sc
     available: true,
     reason: positive ? 'تدفق نقدي تشغيلي موجب' : undefined,
     warning: positive ? undefined : 'التدفق النقدي التشغيلي سالب في آخر فترة متاحة',
+    critical: !positive,
   };
 }
 
@@ -164,6 +166,7 @@ function computeDebtToEquityCheck(debtToEquity?: number): ScoreCheck {
     available: true,
     reason: points > 0 ? 'مستوى دين منخفض إلى معتدل مقارنة بحقوق الملكية' : undefined,
     warning: points === 0 ? 'نسبة الدين إلى حقوق الملكية مرتفعة (أكبر من 1)' : undefined,
+    critical: points === 0,
   };
 }
 

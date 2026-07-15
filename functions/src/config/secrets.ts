@@ -15,6 +15,9 @@ export const APP_TIMEZONE = defineString('APP_TIMEZONE', {
   default: 'Asia/Riyadh',
 });
 
+// رابط الواجهة المنشورة - يُستخدم فقط لبناء زر "فتح السهم في التطبيق" في رسائل Telegram
+export const APP_URL = defineString('APP_URL', { default: '' });
+
 // وضع التطوير: يسمح بحفظ/عرض Raw API Response لأغراض المراجعة فقط.
 // يجب أن يكون false في الإنتاج (هذا هو الافتراضي الآمن).
 export const DEV_MODE = defineString('DEV_MODE', { default: 'false' });

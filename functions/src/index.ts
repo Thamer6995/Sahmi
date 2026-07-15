@@ -22,6 +22,10 @@ export { computeTechnicalIndicators } from './https/computeTechnicalIndicators';
 // ---- المرحلة 5: نظام Investment Score ----
 export { computeInvestmentScoreBatch } from './https/computeInvestmentScore';
 
+// ---- المرحلة 6: Telegram والتنبيهات ----
+export { testTelegramConnection } from './https/testTelegramConnection';
+export { runAlertCheck } from './https/runAlertCheck';
+
 // سيتم إضافة دوال المراحل القادمة هنا تباعًا:
 // - المرحلة 6: sendTelegramAlerts, testTelegramConnection
 // - المرحلة 8: الجدولة scheduled functions

@@ -15,6 +15,8 @@ export interface ScoreCheck {
   warning?: string;
   /** يُعرض إذا كانت البيانات غير متوفرة لتقييم هذا البند تحديدًا */
   missingDataNote?: string;
+  /** تحذير مالي حرج (يمنع إرسال تنبيه Telegram حتى لو تجاوزت الدرجة 80 - انظر قواعد التنبيه) */
+  critical?: boolean;
 }
 
 export interface CategoryResult {
