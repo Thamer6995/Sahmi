@@ -26,6 +26,9 @@ export { computeInvestmentScoreBatch } from './https/computeInvestmentScore';
 export { testTelegramConnection } from './https/testTelegramConnection';
 export { runAlertCheck } from './https/runAlertCheck';
 
+// ---- المرحلة 7: الإعدادات ----
+export { updateSettings } from './https/updateSettings';
+
 // سيتم إضافة دوال المراحل القادمة هنا تباعًا:
 // - المرحلة 6: sendTelegramAlerts, testTelegramConnection
 // - المرحلة 8: الجدولة scheduled functions

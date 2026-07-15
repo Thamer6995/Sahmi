@@ -49,6 +49,12 @@ service cloud.firestore {
     match /scores/{symbol} {
       allow read: if isSignedIn();
       allow write: if false;
+
+      // سجل تغيّر التقييم (subcollection) - يُعرض في صفحة السهم
+      match /history/{historyId} {
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
     }
 
     match /alerts/{alertId} {

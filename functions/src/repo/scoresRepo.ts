@@ -32,6 +32,15 @@ export async function upsertScore(result: InvestmentScoreResult): Promise<void> 
     }),
     { merge: false } // كل تقييم جديد يستبدل السابق بالكامل (لا نُبقي حقولًا قديمة متضاربة)
   );
+
+  // لقطة مختصرة في سجل تاريخي (subcollection) لعرض "سجل تغير التقييم" في صفحة السهم
+  await ref.collection('history').add(
+    omitUndefined({
+      totalScore: result.totalScore,
+      dataCompleteness: result.dataCompleteness,
+      calculatedAt: FieldValue.serverTimestamp(),
+    })
+  );
 }
 
 export async function getScore(symbol: string): Promise<(InvestmentScoreResult & { totalScore?: number }) | undefined> {
@@ -39,4 +48,22 @@ export async function getScore(symbol: string): Promise<(InvestmentScoreResult &
   const snap = await db.collection('scores').doc(symbol).get();
   if (!snap.exists) return undefined;
   return snap.data() as InvestmentScoreResult;
+}
+
+export interface ScoreHistoryEntry {
+  totalScore?: number;
+  dataCompleteness?: number;
+  calculatedAt: unknown;
+}
+
+export async function getScoreHistory(symbol: string, limit = 30): Promise<ScoreHistoryEntry[]> {
+  const db = getFirestore();
+  const snap = await db
+    .collection('scores')
+    .doc(symbol)
+    .collection('history')
+    .orderBy('calculatedAt', 'desc')
+    .limit(limit)
+    .get();
+  return snap.docs.map((d) => d.data() as ScoreHistoryEntry);
 }

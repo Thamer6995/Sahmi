@@ -27,6 +27,15 @@ export interface InvestmentScoreResult {
   calculatedAt: string;
 }
 
+export interface ScoringWeights {
+  quality: number;
+  valuation: number;
+  dividend: number;
+  technical: number;
+}
+
+export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = { quality: 35, valuation: 25, dividend: 25, technical: 15 };
+
 export interface InvestmentScoreInputs {
   symbol: string;
   sector?: string;
@@ -38,6 +47,15 @@ export interface InvestmentScoreInputs {
   bars: OhlcvBar[]; // مرتّبة تصاعديًا
   sectorAvgPE?: number;
   sectorAvgPB?: number;
+  /** أوزان الأقسام الأربعة القابلة للتعديل من الإعدادات - الافتراضي 35/25/25/15 */
+  weights?: ScoringWeights;
+}
+
+/** يعيد توزين نتيجة قسم بحسب الوزن المُعدّ (نسبيًا من الوزن الافتراضي)، مع إبقاء تفاصيل البنود كما هي. */
+function rescaleCategory(category: CategoryResult, defaultMax: number, customMax: number): CategoryResult {
+  if (customMax === defaultMax) return category;
+  const scale = defaultMax > 0 ? customMax / defaultMax : 0;
+  return { score: category.score * scale, maxScore: customMax, checks: category.checks };
 }
 
 /**
@@ -65,17 +83,35 @@ export function computeInvestmentScore(inputs: InvestmentScoreInputs): Investmen
     };
   }
 
-  const quality = computeQualityScore({ annualPeriods: inputs.annualFinancials, ratios: inputs.ratios });
-  const valuation = computeValuationScore({
-    pe: inputs.ratios?.pe,
-    pb: inputs.ratios?.pb,
-    sectorAvgPE: inputs.sectorAvgPE,
-    sectorAvgPB: inputs.sectorAvgPB,
-    price: inputs.price,
-    fiftyTwoWeekLow: fiftyTwoWeekLow(inputs.bars),
-  });
-  const dividend = computeDividendScore({ dividends: inputs.dividends, ratios: inputs.ratios });
-  const technical = computeTechnicalScore(inputs.bars, inputs.price);
+  const weights = inputs.weights ?? DEFAULT_SCORING_WEIGHTS;
+
+  const quality = rescaleCategory(
+    computeQualityScore({ annualPeriods: inputs.annualFinancials, ratios: inputs.ratios }),
+    DEFAULT_SCORING_WEIGHTS.quality,
+    weights.quality
+  );
+  const valuation = rescaleCategory(
+    computeValuationScore({
+      pe: inputs.ratios?.pe,
+      pb: inputs.ratios?.pb,
+      sectorAvgPE: inputs.sectorAvgPE,
+      sectorAvgPB: inputs.sectorAvgPB,
+      price: inputs.price,
+      fiftyTwoWeekLow: fiftyTwoWeekLow(inputs.bars),
+    }),
+    DEFAULT_SCORING_WEIGHTS.valuation,
+    weights.valuation
+  );
+  const dividend = rescaleCategory(
+    computeDividendScore({ dividends: inputs.dividends, ratios: inputs.ratios }),
+    DEFAULT_SCORING_WEIGHTS.dividend,
+    weights.dividend
+  );
+  const technical = rescaleCategory(
+    computeTechnicalScore(inputs.bars, inputs.price),
+    DEFAULT_SCORING_WEIGHTS.technical,
+    weights.technical
+  );
 
   const categories = [quality, valuation, dividend, technical];
   const totalScore = categories.reduce((acc, c) => acc + c.score, 0);

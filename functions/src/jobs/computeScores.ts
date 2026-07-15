@@ -6,18 +6,20 @@ import { getDividendsForSymbol } from '../repo/dividendsRepo';
 import { getRecentBars } from '../repo/historicalPricesRepo';
 import { computeSectorAverages } from '../repo/sectorAveragesRepo';
 import { upsertScore } from '../repo/scoresRepo';
+import { getSettings } from '../repo/settingsRepo';
 import { computeInvestmentScore, InvestmentScoreResult } from '../scoring/investmentScore';
 import { runBatched, BatchRunSummary } from '../utils/batchRunner';
 
 /** يحسب Investment Score لسهم واحد من البيانات المخزَّنة فعليًا في Firestore، ويخزّن النتيجة. */
 export async function computeScoreForSymbol(symbol: string): Promise<InvestmentScoreResult> {
-  const [company, quote, annualFinancials, ratios, dividends, bars] = await Promise.all([
+  const [company, quote, annualFinancials, ratios, dividends, bars, settings] = await Promise.all([
     getCompany(symbol),
     getQuote(symbol),
     getAnnualPeriods(symbol),
     getRatios(symbol),
     getDividendsForSymbol(symbol),
     getRecentBars(symbol, 250),
+    getSettings(),
   ]);
 
   let sectorAvgPE: number | undefined;
@@ -39,6 +41,7 @@ export async function computeScoreForSymbol(symbol: string): Promise<InvestmentS
     bars,
     sectorAvgPE,
     sectorAvgPB,
+    weights: settings.scoringWeights,
   });
 
   await upsertScore(result);
