@@ -14,6 +14,8 @@ export default function DevTest() {
   const [rawResponses, setRawResponses] = useState<unknown>(null);
   const [companiesResult, setCompaniesResult] = useState<unknown>(null);
   const [quotesResult, setQuotesResult] = useState<unknown>(null);
+  const [financialsResult, setFinancialsResult] = useState<unknown>(null);
+  const [dividendsResult, setDividendsResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +68,34 @@ export default function DevTest() {
       const fn = httpsCallable(functions, 'manualRefreshQuotes');
       const res = await fn();
       setQuotesResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runRefreshFinancials() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'manualRefreshFinancials');
+      const res = await fn({ symbol: '2222' });
+      setFinancialsResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runRefreshDividends() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'manualRefreshDividends');
+      const res = await fn({ symbol: '2222' });
+      setDividendsResult(res.data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -155,6 +185,48 @@ export default function DevTest() {
           <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة تحديث الأسعار:</h2>
           <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
             {JSON.stringify(quotesResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      <hr className="my-6 border-slate-200" />
+
+      <h1 className="mb-2 text-lg font-bold">اختبار المرحلة ٣ - المالية والنسب والتوزيعات (2222)</h1>
+      <p className="mb-4 text-sm text-slate-500">
+        تحديث القوائم المالية والنسب وسجل التوزيعات لشركة أرامكو (2222) فقط.
+      </p>
+
+      <div className="mb-6 flex gap-3">
+        <button
+          onClick={runRefreshFinancials}
+          disabled={loading}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          تحديث المالية والنسب
+        </button>
+        <button
+          onClick={runRefreshDividends}
+          disabled={loading}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          تحديث التوزيعات
+        </button>
+      </div>
+
+      {financialsResult !== null && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة تحديث المالية والنسب:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(financialsResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {dividendsResult !== null && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة تحديث التوزيعات:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(dividendsResult, null, 2)}
           </pre>
         </div>
       )}

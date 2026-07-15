@@ -11,8 +11,11 @@ export { healthCheck } from './https/healthCheck';
 export { manualRefreshCompanies } from './https/manualRefreshCompanies';
 export { manualRefreshQuotes } from './https/manualRefreshQuotes';
 
+// ---- المرحلة 3: القوائم المالية + النسب + التوزيعات ----
+export { manualRefreshFinancials } from './https/manualRefreshFinancials';
+export { manualRefreshDividends } from './https/manualRefreshDividends';
+
 // سيتم إضافة دوال المراحل القادمة هنا تباعًا:
-// - المرحلة 3: refreshFinancials, refreshDividends
 // - المرحلة 4: refreshHistorical
 // - المرحلة 5: runScoring
 // - المرحلة 6: sendTelegramAlerts, testTelegramConnection
