@@ -29,6 +29,9 @@ export { runAlertCheck } from './https/runAlertCheck';
 // ---- المرحلة 7: الإعدادات ----
 export { updateSettings } from './https/updateSettings';
 
-// سيتم إضافة دوال المراحل القادمة هنا تباعًا:
+// ---- المرحلة 8: الجدولة ----
+export { dailyPriceAndAlertScan } from './scheduled/dailyPriceAndAlertScan';
+export { weeklyFinancialsScan } from './scheduled/weeklyFinancialsScan';
+export { dailyDividendsScan } from './scheduled/dailyDividendsScan';
 // - المرحلة 6: sendTelegramAlerts, testTelegramConnection
 // - المرحلة 8: الجدولة scheduled functions
