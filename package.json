@@ -1,0 +1,14 @@
+{
+  "name": "sahmi",
+  "private": true,
+  "version": "1.0.0",
+  "description": "سهمي - تطبيق شخصي لتحليل أسهم السوق السعودي (TASI) وإرسال تنبيهات Telegram",
+  "workspaces": ["frontend", "functions"],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build:frontend": "npm run build --workspace frontend",
+    "build:functions": "npm run build --workspace functions",
+    "test:functions": "npm run test --workspace functions",
+    "emulators": "firebase emulators:start"
+  }
+}
