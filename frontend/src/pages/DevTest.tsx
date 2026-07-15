@@ -18,6 +18,7 @@ export default function DevTest() {
   const [dividendsResult, setDividendsResult] = useState<unknown>(null);
   const [historicalResult, setHistoricalResult] = useState<unknown>(null);
   const [technicalResult, setTechnicalResult] = useState<unknown>(null);
+  const [scoreResult, setScoreResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -126,6 +127,41 @@ export default function DevTest() {
       const fn = httpsCallable(functions, 'computeTechnicalIndicators');
       const res = await fn({ symbol: '2222' });
       setTechnicalResult(res.data);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // خمس شركات من قطاعات مختلفة (طاقة/بنوك للاستبعاد/أغذية/اتصالات/تعدين)
+  const FIVE_SECTOR_SYMBOLS = ['2222', '1120', '2280', '7010', '1211'];
+
+  async function prepareFiveSectorCompanies() {
+    setLoading(true);
+    setError(null);
+    try {
+      await httpsCallable(functions, 'manualRefreshCompanies')();
+      for (const symbol of FIVE_SECTOR_SYMBOLS) {
+        await httpsCallable(functions, 'manualRefreshQuotes')({ symbol });
+        await httpsCallable(functions, 'manualRefreshFinancials')({ symbol });
+        await httpsCallable(functions, 'manualRefreshDividends')({ symbol });
+        await httpsCallable(functions, 'manualRefreshHistorical')({ symbol });
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runComputeScoresForFive() {
+    setLoading(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'computeInvestmentScoreBatch');
+      const res = await fn({ symbols: FIVE_SECTOR_SYMBOLS });
+      setScoreResult(res.data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -299,6 +335,39 @@ export default function DevTest() {
           <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة المؤشرات الفنية:</h2>
           <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
             {JSON.stringify(technicalResult, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      <hr className="my-6 border-slate-200" />
+
+      <h1 className="mb-2 text-lg font-bold">اختبار المرحلة ٥ - Investment Score (5 شركات من قطاعات مختلفة)</h1>
+      <p className="mb-4 text-sm text-slate-500">
+        2222 (طاقة)، 1120 (بنوك - يجب أن تُستبعد)، 2280 (أغذية)، 7010 (اتصالات)، 1211 (تعدين). جهّز البيانات أولًا ثم احسب التقييم.
+      </p>
+
+      <div className="mb-6 flex gap-3">
+        <button
+          onClick={prepareFiveSectorCompanies}
+          disabled={loading}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          تجهيز بيانات الشركات الخمس
+        </button>
+        <button
+          onClick={runComputeScoresForFive}
+          disabled={loading}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          حساب Investment Score
+        </button>
+      </div>
+
+      {scoreResult !== null && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">نتيجة التقييم:</h2>
+          <pre className="overflow-auto rounded-lg bg-slate-900 p-4 text-left text-xs text-green-400" dir="ltr">
+            {JSON.stringify(scoreResult, null, 2)}
           </pre>
         </div>
       )}

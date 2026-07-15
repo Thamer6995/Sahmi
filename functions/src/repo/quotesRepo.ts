@@ -31,3 +31,10 @@ export async function upsertQuotes(quotes: NormalizedQuote[]): Promise<void> {
     await batch.commit();
   }
 }
+
+export async function getQuote(symbol: string): Promise<NormalizedQuote | undefined> {
+  const db = getFirestore();
+  const snap = await db.collection('quotes').doc(symbol).get();
+  if (!snap.exists) return undefined;
+  return snap.data() as NormalizedQuote;
+}

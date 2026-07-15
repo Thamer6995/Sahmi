@@ -36,3 +36,10 @@ export async function getAllCompanySymbols(): Promise<string[]> {
   const snap = await db.collection('companies').select().get();
   return snap.docs.map((d) => d.id);
 }
+
+export async function getCompany(symbol: string): Promise<NormalizedCompany | undefined> {
+  const db = getFirestore();
+  const snap = await db.collection('companies').doc(symbol).get();
+  if (!snap.exists) return undefined;
+  return snap.data() as NormalizedCompany;
+}

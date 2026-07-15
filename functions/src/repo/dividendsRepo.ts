@@ -33,3 +33,16 @@ export async function upsertDividends(dividends: NormalizedDividend[]): Promise<
 
   await batch.commit();
 }
+
+/** سجل التوزيعات لسهم، مرتّب تصاعديًا حسب أقرب تاريخ متاح (استحقاق/صرف/إعلان). */
+export async function getDividendsForSymbol(symbol: string): Promise<NormalizedDividend[]> {
+  const db = getFirestore();
+  const snap = await db.collection('dividends').where('symbol', '==', symbol).get();
+  const dividends = snap.docs.map((d) => d.data() as NormalizedDividend);
+
+  function sortKey(d: NormalizedDividend): string {
+    return d.eligibilityDate ?? d.distributionDate ?? d.announcementDate ?? '';
+  }
+
+  return dividends.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+}

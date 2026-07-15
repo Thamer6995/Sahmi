@@ -36,3 +36,16 @@ export async function upsertFinancials(periods: NormalizedFinancialPeriod[]): Pr
 
   await batch.commit();
 }
+
+/** الفترات السنوية لسهم، مرتّبة تصاعديًا حسب الفترة (الأقدم أولًا). */
+export async function getAnnualPeriods(symbol: string): Promise<NormalizedFinancialPeriod[]> {
+  const db = getFirestore();
+  const snap = await db
+    .collection('financials')
+    .where('symbol', '==', symbol)
+    .where('periodType', '==', 'annual')
+    .get();
+
+  const periods = snap.docs.map((d) => d.data() as NormalizedFinancialPeriod);
+  return periods.sort((a, b) => a.period.localeCompare(b.period));
+}

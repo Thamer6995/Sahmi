@@ -23,3 +23,10 @@ export async function upsertRatios(ratios: NormalizedRatios): Promise<void> {
     { merge: true }
   );
 }
+
+export async function getRatios(symbol: string): Promise<NormalizedRatios | undefined> {
+  const db = getFirestore();
+  const snap = await db.collection('ratios').doc(symbol).get();
+  if (!snap.exists) return undefined;
+  return snap.data() as NormalizedRatios;
+}

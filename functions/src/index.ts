@@ -19,7 +19,9 @@ export { manualRefreshDividends } from './https/manualRefreshDividends';
 export { manualRefreshHistorical } from './https/manualRefreshHistorical';
 export { computeTechnicalIndicators } from './https/computeTechnicalIndicators';
 
+// ---- المرحلة 5: نظام Investment Score ----
+export { computeInvestmentScoreBatch } from './https/computeInvestmentScore';
+
 // سيتم إضافة دوال المراحل القادمة هنا تباعًا:
-// - المرحلة 5: runScoring
 // - المرحلة 6: sendTelegramAlerts, testTelegramConnection
 // - المرحلة 8: الجدولة scheduled functions
