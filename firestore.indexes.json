@@ -26,13 +26,6 @@
       ]
     },
     {
-      "collectionGroup": "dividends",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "eligibilityDate", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "scores",
       "queryScope": "COLLECTION",
       "fields": [
@@ -57,13 +50,6 @@
         { "fieldPath": "alertType", "order": "ASCENDING" },
         { "fieldPath": "sentToTelegram", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "alerts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
