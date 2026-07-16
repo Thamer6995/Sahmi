@@ -35,10 +35,25 @@ jobs:
     if: github.event.schedule == '0 0 * * 0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger weekly financials scan
+      # المهمة مقسّمة إلى دفعات صغيرة على السيرفر (انظر
+      # server/src/scheduled/weeklyFinancialsScan.ts) لأن استدعاء واحدًا
+      # يمر على كل شركات السوق دفعة واحدة يتوقف أحيانًا بصمت قبل اكتماله
+      # (مؤكَّد فعليًا من سجلات Render). نكرر الاستدعاء هنا حتى ترجع done=true.
+      - name: Trigger weekly financials scan (loop until complete)
         run: |
-          curl -sS -f -X POST "${{ vars.RENDER_APP_URL }}/internal/weekly-financials" \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
+          for i in $(seq 1 30); do
+            response=$(curl -sS -X POST "${{ vars.RENDER_APP_URL }}/internal/weekly-financials" \
+              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}")
+            echo "$response"
+            done=$(echo "$response" | jq -r '.done // false')
+            if [ "$done" = "true" ]; then
+              echo "Weekly financials scan cycle completed."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Weekly financials scan did not complete within the retry budget." >&2
+          exit 1
 
   daily-dividends-scan:
     if: github.event.schedule == '0 1 * * *' || github.event_name == 'workflow_dispatch'
