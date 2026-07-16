@@ -49,6 +49,12 @@ export const CompanySchema = z
     name: z.string().optional(),
     name_en: z.string().optional(),
     name_ar: z.string().optional(),
+    // ⚠️ مؤكَّد من raw response فعلي (company/2222/): SAHMK يستخدم sector_name/
+    // sector_name_ar وmarket_id - وليس sector/market كما افترضنا قبل التحقق.
+    // نُبقي sector/industry/market كاحتمال احتياطي فقط (endpoints أخرى قد تختلف).
+    sector_name: z.string().optional(),
+    sector_name_ar: z.string().optional(),
+    market_id: z.string().optional(),
     sector: z.string().optional(),
     industry: z.string().optional(),
     market: z.string().optional(),

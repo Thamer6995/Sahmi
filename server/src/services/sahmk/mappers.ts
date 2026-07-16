@@ -40,9 +40,10 @@ export function normalizeCompany(raw: SahmkCompany): NormalizedCompany | null {
     // نعطي الأولوية لـ name_ar الصريح إن وُجد.
     nameAr: raw.name_ar ?? raw.name,
     nameEn: raw.name_en,
-    sector: raw.sector,
+    // مؤكَّد من raw response فعلي: الحقل الصحيح sector_name_ar/sector_name (وليس sector)
+    sector: raw.sector_name_ar ?? raw.sector_name ?? raw.sector,
     industry: raw.industry,
-    market: raw.market,
+    market: raw.market_id ?? raw.market,
   };
 }
 
