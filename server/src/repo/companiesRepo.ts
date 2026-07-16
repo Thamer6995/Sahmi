@@ -31,6 +31,31 @@ export async function upsertCompanies(companies: NormalizedCompany[]): Promise<v
   }
 }
 
+/**
+ * تحديث جزئي لقطاع/سوق شركة واحدة فقط. مطلوب لأن endpoint الجملة
+ * /companies/ (المستخدم في upsertCompanies) لا يرجع sector_name/
+ * sector_name_ar/market_id إطلاقًا (مؤكَّد من raw response فعلي) - فقط
+ * /company/{symbol}/ المفرد يحوي هذه الحقول. يُستدعى من
+ * jobs/refreshFinancialsAndRatios.ts الذي يجلب /company/{symbol}/ أصلًا
+ * لاستخراج P/E وP/B، فلا حاجة لاستدعاء API إضافي.
+ */
+export async function updateCompanySector(
+  symbol: string,
+  data: { sector?: string; industry?: string; market?: string }
+): Promise<void> {
+  const db = getFirestore();
+  const update = omitUndefined({
+    sector: data.sector,
+    industry: data.industry,
+    market: data.market,
+  });
+  if (Object.keys(update).length === 0) return;
+  await db
+    .collection('companies')
+    .doc(symbol)
+    .set({ ...update, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+}
+
 export async function getAllCompanySymbols(): Promise<string[]> {
   const db = getFirestore();
   const snap = await db.collection('companies').select().get();
