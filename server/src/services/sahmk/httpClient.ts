@@ -7,6 +7,22 @@ const MAX_RETRIES = 3;
 const BACKOFF_FACTOR_MS = 500; // 0.5s -> 1s -> 2s، مطابق لسلوك SDK الرسمي
 const REQUEST_TIMEOUT_MS = 15_000;
 
+// عند 429، بعض الأحيان تطلب SAHMK انتظارًا أطول بكثير من الـ backoff
+// الأسّي القصير أعلاه (لوحظ فعليًا حتى 30 ثانية أثناء تحديث شامل لكامل
+// السوق) - مؤكَّد من رسالة الخطأ نفسها "Expected available in N seconds".
+// بدون احترام هذه القيمة، إعادة المحاولة تفشل بشكل دائم لعشرات الرموز في
+// كل تحديث أسبوعي رغم أن البيانات متاحة فعليًا بعد انتظار كافٍ.
+const MAX_RATE_LIMIT_RETRIES = 6;
+const MAX_RATE_LIMIT_WAIT_MS = 35_000;
+
+function parseRetryAfterMs(bodyText: string): number | undefined {
+  const match = bodyText.match(/available in\s+([\d.]+)\s*second/i);
+  if (!match) return undefined;
+  const seconds = Number(match[1]);
+  if (!Number.isFinite(seconds)) return undefined;
+  return Math.min(Math.ceil(seconds * 1000) + 500, MAX_RATE_LIMIT_WAIT_MS); // +500ms هامش أمان
+}
+
 interface RequestOptions {
   query?: Record<string, string | number | string[] | undefined>;
   /** لا تُعِد المحاولة تلقائيًا (تُستخدم لطلبات ذات كلفة خاصة إن لزم) */
@@ -60,7 +76,10 @@ export async function sahmkGet<T = unknown>(path: string, options: RequestOption
   const url = buildUrl(baseUrl, path, options.query);
 
   let lastError: SahmkApiError | undefined;
-  const maxAttempts = options.noRetry ? 1 : MAX_RETRIES + 1;
+  // سقف المحاولات ديناميكي: يبدأ بالحد العادي، ويمتد فقط إذا واجهنا فعليًا
+  // 429 (تحتاج انتظارًا أطول من الأخطاء الأخرى القابلة لإعادة المحاولة).
+  let maxAttempts = options.noRetry ? 1 : MAX_RETRIES + 1;
+  let nextDelayMs: number | undefined;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const controller = new AbortController();
@@ -103,7 +122,16 @@ export async function sahmkGet<T = unknown>(path: string, options: RequestOption
         bodySnippet: bodyText.slice(0, 300),
       });
 
-      if (!retryable || attempt === maxAttempts - 1) {
+      if (!retryable) {
+        throw err;
+      }
+
+      if (kind === 'RATE_LIMITED' && !options.noRetry) {
+        maxAttempts = Math.max(maxAttempts, MAX_RATE_LIMIT_RETRIES + 1);
+        nextDelayMs = parseRetryAfterMs(bodyText);
+      }
+
+      if (attempt === maxAttempts - 1) {
         throw err;
       }
       lastError = err;
@@ -129,7 +157,8 @@ export async function sahmkGet<T = unknown>(path: string, options: RequestOption
       }
     }
 
-    const delay = BACKOFF_FACTOR_MS * Math.pow(2, attempt);
+    const delay = nextDelayMs ?? BACKOFF_FACTOR_MS * Math.pow(2, attempt);
+    nextDelayMs = undefined;
     await sleep(delay);
   }
 

@@ -6,7 +6,10 @@ import { getAllCompanySymbols, updateCompanySector } from '../repo/companiesRepo
 import { runBatched, BatchRunSummary } from '../utils/batchRunner';
 import { logger } from '../utils/logger';
 
-const CONCURRENCY = 5;
+// أقل من باقي المهام (5) لأن كل رمز هنا يستدعي حتى 3 طلبات SAHMK متتالية
+// (financials + ratios + company) - تزامن أعلى أدى فعليًا إلى throttling
+// متكرر (429) أثناء تحديث شامل لكامل السوق (مؤكَّد من سجلات Render فعلية).
+const CONCURRENCY = 3;
 
 /**
  * يحدّث القوائم المالية والنسب لكل رمز على حدة. الاثنان (financials و
