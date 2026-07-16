@@ -1,5 +1,5 @@
 import { sahmkService } from '../services/sahmk/SahmkService';
-import { normalizeFinancials, normalizeRatios } from '../services/sahmk/mappers';
+import { normalizeFinancials, normalizeRatios, extractCompanyFundamentals } from '../services/sahmk/mappers';
 import { upsertFinancials } from '../repo/financialsRepo';
 import { upsertRatios } from '../repo/ratiosRepo';
 import { getAllCompanySymbols } from '../repo/companiesRepo';
@@ -35,6 +35,20 @@ export async function refreshFinancialsAndRatios(symbols?: string[]): Promise<Ba
       try {
         const ratiosRaw = await sahmkService.getRatios(symbol);
         const ratios = normalizeRatios(symbol, ratiosRaw);
+
+        // P/E وP/B غير متوفرين في /analytics/ratios/ إطلاقًا (مؤكَّد من raw
+        // response فعلي) - مصدرهما fundamentals ضمن /company/{symbol}/.
+        // فشل هذا الاستدعاء الإضافي لا يمنع حفظ بقية النسب.
+        try {
+          const companyRaw = await sahmkService.getCompany(symbol);
+          const { pe, pb, eps } = extractCompanyFundamentals(companyRaw);
+          ratios.pe = ratios.pe ?? pe;
+          ratios.pb = ratios.pb ?? pb;
+          if (eps !== undefined) ratios.rawMetrics.eps = eps;
+        } catch (err) {
+          logger.warn('refresh_ratios_company_fundamentals_failed', { symbol, message: (err as Error).message });
+        }
+
         await upsertRatios(ratios);
       } catch (err) {
         partialErrors.push(`ratios: ${(err as Error).message}`);

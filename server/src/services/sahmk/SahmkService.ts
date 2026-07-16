@@ -107,6 +107,7 @@ export class SahmkService {
     const raw = await sahmkGet<unknown>(`/historical/${encodeURIComponent(symbol)}/`, {
       query: { interval: params.interval ?? '1d', from: params.from, to: params.to },
     });
+    await saveRawResponseForReview(`/historical/${symbol}/`, raw);
     return validate(HistoricalResponseSchema, raw, `/historical/${symbol}/`);
   }
 

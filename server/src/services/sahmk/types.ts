@@ -58,6 +58,9 @@ export const CompanySchema = z
     sector: z.string().optional(),
     industry: z.string().optional(),
     market: z.string().optional(),
+    // مؤكَّد من raw response فعلي: يحوي pe_ratio/price_to_book/eps_ttm وغيرها
+    // (P/E وP/B لا تتوفران في /analytics/ratios/ إطلاقًا - مصدرهما هنا فقط)
+    fundamentals: z.record(z.unknown()).optional(),
   })
   .passthrough();
 export type SahmkCompany = z.infer<typeof CompanySchema>;
@@ -108,16 +111,30 @@ export const FinancialsResponseSchema = z
   .passthrough();
 export type SahmkFinancialsResponse = z.infer<typeof FinancialsResponseSchema>;
 
+// مؤكَّد من raw response فعلي (/analytics/ratios/2222/): البنية الفعلية هي
+// مصفوفة "ratios" (فترة واحدة افتراضيًا بدون history) بها كائنان متداخلان
+// ratios{} (نسب جاهزة) وkey_metrics{} (أرقام خام) - وليست metrics{} مسطّحة
+// كما افترضنا قبل التحقق. meta.metrics هنا نص وصفي ("core") وليس كائنًا.
+export const RatiosPeriodEntrySchema = z
+  .object({
+    report_date: z.string().optional(),
+    statement_period: z.string().optional(),
+    fiscal_year: z.union([z.string(), z.number()]).nullable().optional(),
+    fiscal_quarter: z.union([z.string(), z.number()]).nullable().optional(),
+    ratios: z.record(z.unknown()).optional(),
+    key_metrics: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+export type SahmkRatiosPeriodEntry = z.infer<typeof RatiosPeriodEntrySchema>;
+
 export const RatiosResponseSchema = z
   .object({
     symbol: z.string().optional(),
-    period: z.string().optional(),
-    metrics: z.record(z.unknown()).optional(),
-    warnings: z.array(z.string()).optional(),
+    ratios: z.array(RatiosPeriodEntrySchema).optional(),
     meta: z
       .object({
         period: z.string().optional(),
-        metrics: z.record(z.unknown()).optional(),
+        metrics: z.string().optional(),
         warnings: z.array(z.string()).optional(),
       })
       .partial()
@@ -126,11 +143,19 @@ export const RatiosResponseSchema = z
   .passthrough();
 export type SahmkRatiosResponse = z.infer<typeof RatiosResponseSchema>;
 
+// مؤكَّد من raw response فعلي (/dividends/2222/): كل توزيع بحقل "value" وليس
+// "amount_per_share"، والقائمة بحقل "history" (وأحيانًا "upcoming" منفصلة)
+// وليست "dividends"/"results" كما افترضنا قبل التحقق.
 export const DividendEntrySchema = z
   .object({
+    value: z.number().optional(),
+    value_percent: z.number().nullable().optional(),
+    period: z.string().nullable().optional(),
+    fiscal_year: z.union([z.string(), z.number()]).nullable().optional(),
     announcement_date: z.string().optional(),
     eligibility_date: z.string().optional(),
     distribution_date: z.string().optional(),
+    // احتياط لأسماء حقول محتملة في endpoints أو نسخ أخرى
     amount_per_share: z.number().optional(),
     dividend_yield: z.number().optional(),
     status: z.string().optional(),
@@ -141,6 +166,13 @@ export type SahmkDividendEntry = z.infer<typeof DividendEntrySchema>;
 export const DividendsResponseSchema = z
   .object({
     symbol: z.string().optional(),
+    current_price: z.number().optional(),
+    trailing_12m_yield: z.number().optional(),
+    trailing_12m_dividends: z.number().optional(),
+    payments_last_year: z.number().optional(),
+    upcoming: z.array(DividendEntrySchema).optional(),
+    history: z.array(DividendEntrySchema).optional(),
+    // احتياط
     dividends: z.array(DividendEntrySchema).optional(),
     results: z.array(DividendEntrySchema).optional(),
   })

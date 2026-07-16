@@ -81,7 +81,8 @@ const NET_INCOME_KEYS = ['net_income', 'net_profit', 'profit_for_the_period', 'n
 const OPERATING_CASH_FLOW_KEYS = ['operating_cash_flow', 'cash_from_operations', 'net_cash_from_operating_activities'];
 const TOTAL_ASSETS_KEYS = ['total_assets'];
 const TOTAL_LIABILITIES_KEYS = ['total_liabilities'];
-const TOTAL_EQUITY_KEYS = ['total_equity', 'shareholders_equity', 'total_shareholders_equity'];
+// مؤكَّد من raw response فعلي: الحقل الصحيح stockholders_equity
+const TOTAL_EQUITY_KEYS = ['stockholders_equity', 'total_equity', 'shareholders_equity', 'total_shareholders_equity'];
 const TOTAL_DEBT_KEYS = ['total_debt', 'total_borrowings', 'total_loans'];
 
 /**
@@ -101,6 +102,11 @@ export function normalizeFinancials(symbol: string, raw: SahmkFinancialsResponse
 
   function ingest(records: Record<string, unknown>[] | undefined, kind: 'income' | 'balance' | 'cashFlow') {
     for (const record of records ?? []) {
+      // مؤكَّد من raw response فعلي: بعض السجلات "السنوية" جزئية فعليًا
+      // (is_full_year=false، quarters_reported أقل من 4) - نستبعدها كي لا
+      // تُشوّه حساب CAGR/النمو بمقارنة بيانات جزئية بأخرى كاملة.
+      if (record.is_full_year === false) continue;
+
       const periodKey = extractPeriodKey(record);
       if (!periodKey) continue; // لا يمكن دمج سجل بلا فترة معروفة
       const periodType = detectPeriodType(record) ?? 'annual'; // افتراض سنوي إن لم يُحدَّد صراحة
@@ -152,21 +158,47 @@ export interface NormalizedRatios {
   rawMetrics: Record<string, unknown>;
 }
 
+/**
+ * مؤكَّد من raw response فعلي (/analytics/ratios/2222/): البنية الفعلية
+ * مصفوفة "ratios" (نأخذ أحدث/أول عنصر - الفترة الحالية بدون history)، وكل
+ * عنصر يحوي كائنين متداخلين: ratios{} (نسب جاهزة كـ roe/roa/net_margin/
+ * debt_to_equity) وkey_metrics{} (أرقام خام). P/E وP/B **غير متوفرين هنا
+ * إطلاقًا** - مصدرهما fundamentals ضمن /company/{symbol}/ (انظر
+ * extractCompanyFundamentals وjobs/refreshFinancialsAndRatios.ts).
+ */
 export function normalizeRatios(symbol: string, raw: SahmkRatiosResponse): NormalizedRatios {
-  const metrics = (raw.metrics ?? raw.meta?.metrics ?? {}) as Record<string, unknown>;
+  const latest = raw.ratios?.[0];
+  const ratiosBlock = (latest?.ratios ?? {}) as Record<string, unknown>;
+  const keyMetrics = (latest?.key_metrics ?? {}) as Record<string, unknown>;
+  const combined = { ...keyMetrics, ...ratiosBlock };
 
   return {
     symbol,
-    pe: pickNumber(metrics, ['pe', 'pe_ratio', 'price_to_earnings', 'p_e']),
-    pb: pickNumber(metrics, ['pb', 'pb_ratio', 'price_to_book', 'p_b']),
-    roe: pickNumber(metrics, ['roe', 'return_on_equity']),
-    roa: pickNumber(metrics, ['roa', 'return_on_assets']),
-    debtToEquity: pickNumber(metrics, ['debt_to_equity', 'de_ratio', 'debt_equity_ratio']),
-    profitMargin: pickNumber(metrics, ['net_profit_margin', 'profit_margin', 'net_margin']),
-    revenueGrowth: pickNumber(metrics, ['revenue_growth', 'sales_growth']),
-    netIncomeGrowth: pickNumber(metrics, ['net_income_growth', 'earnings_growth']),
-    dividendYield: pickNumber(metrics, ['dividend_yield', 'div_yield']),
-    rawMetrics: { ...metrics, warnings: raw.warnings ?? raw.meta?.warnings },
+    pe: pickNumber(ratiosBlock, ['pe', 'pe_ratio', 'price_to_earnings', 'p_e']),
+    pb: pickNumber(ratiosBlock, ['pb', 'pb_ratio', 'price_to_book', 'p_b']),
+    roe: pickNumber(ratiosBlock, ['roe', 'return_on_equity']),
+    roa: pickNumber(ratiosBlock, ['roa', 'return_on_assets']),
+    debtToEquity: pickNumber(ratiosBlock, ['debt_to_equity', 'de_ratio', 'debt_equity_ratio']),
+    profitMargin: pickNumber(ratiosBlock, ['net_profit_margin', 'profit_margin', 'net_margin']),
+    revenueGrowth: pickNumber(ratiosBlock, ['revenue_growth', 'sales_growth']),
+    netIncomeGrowth: pickNumber(ratiosBlock, ['net_income_growth', 'earnings_growth']),
+    dividendYield: pickNumber(ratiosBlock, ['dividend_yield', 'div_yield']),
+    rawMetrics: { ...combined, warnings: raw.meta?.warnings },
+  };
+}
+
+/**
+ * يستخرج P/E وP/B وEPS من fundamentals ضمن استجابة /company/{symbol}/ -
+ * هذه القيم غير متوفرة في /analytics/ratios/ إطلاقًا (مؤكَّد من raw
+ * response فعلي)، فتُدمج مع النسب في jobs/refreshFinancialsAndRatios.ts.
+ */
+export function extractCompanyFundamentals(raw: SahmkCompany): { pe?: number; pb?: number; eps?: number } {
+  const fundamentals = (raw as unknown as { fundamentals?: Record<string, unknown> }).fundamentals;
+  if (!fundamentals) return {};
+  return {
+    pe: pickNumber(fundamentals, ['pe_ratio', 'pe']),
+    pb: pickNumber(fundamentals, ['price_to_book', 'pb_ratio']),
+    eps: pickNumber(fundamentals, ['eps_ttm', 'eps', 'basic_eps']),
   };
 }
 
@@ -186,7 +218,8 @@ export function normalizeDividendEntry(symbol: string, raw: SahmkDividendEntry):
     announcementDate: raw.announcement_date,
     eligibilityDate: raw.eligibility_date,
     distributionDate: raw.distribution_date,
-    amountPerShare: raw.amount_per_share,
+    // مؤكَّد من raw response فعلي: الحقل الصحيح "value" (وليس amount_per_share)
+    amountPerShare: raw.value ?? raw.amount_per_share,
     dividendYield: raw.dividend_yield,
     status: raw.status,
   };

@@ -30,3 +30,16 @@ export async function getRatios(symbol: string): Promise<NormalizedRatios | unde
   if (!snap.exists) return undefined;
   return snap.data() as NormalizedRatios;
 }
+
+/**
+ * يحدّث عائد التوزيعات فقط (merge جزئي) - مصدره الفعلي /dividends/ (حقل
+ * trailing_12m_yield) وليس /analytics/ratios/، والتحديث اليومي للتوزيعات
+ * منفصل عن التحديث الأسبوعي لبقية النسب المالية.
+ */
+export async function updateDividendYield(symbol: string, dividendYield: number): Promise<void> {
+  const db = getFirestore();
+  await db
+    .collection('ratios')
+    .doc(symbol)
+    .set({ symbol, dividendYield, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+}
