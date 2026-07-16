@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import { backendCallable } from '../lib/backend';
 import { useCollection } from '../hooks/useCollection';
 import { AppSettings, Company, DEFAULT_APP_SETTINGS } from '../types/models';
 
@@ -29,7 +29,7 @@ export default function Settings() {
     setSettings(next);
     setSaveStatus('running');
     try {
-      const fn = httpsCallable(functions, 'updateSettings');
+      const fn = backendCallable('updateSettings');
       await fn(partial);
       setSaveStatus('done');
     } catch {
@@ -46,7 +46,7 @@ export default function Settings() {
   async function runTestTelegram() {
     setTelegramStatus('running');
     try {
-      const fn = httpsCallable<unknown, { ok: boolean }>(functions, 'testTelegramConnection');
+      const fn = backendCallable<unknown, { ok: boolean }>('testTelegramConnection');
       const res = await fn();
       setTelegramStatus(res.data.ok ? 'done' : 'error');
     } catch {
@@ -57,7 +57,7 @@ export default function Settings() {
   async function runHealthCheck() {
     setHealthStatus('running');
     try {
-      const fn = httpsCallable(functions, 'healthCheck');
+      const fn = backendCallable('healthCheck');
       const res = await fn();
       setHealthResult(res.data);
       setHealthStatus('done');
@@ -69,8 +69,8 @@ export default function Settings() {
   async function runManualRefreshAll() {
     setRefreshStatus('running');
     try {
-      await httpsCallable(functions, 'manualRefreshCompanies')();
-      await httpsCallable(functions, 'manualRefreshQuotes')();
+      await backendCallable('manualRefreshCompanies')();
+      await backendCallable('manualRefreshQuotes')();
       setRefreshStatus('done');
     } catch {
       setRefreshStatus('error');

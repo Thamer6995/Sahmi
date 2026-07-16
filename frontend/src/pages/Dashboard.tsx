@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, doc, onSnapshot, orderBy, query, limit as fbLimit } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import { backendCallable } from '../lib/backend';
 import { useCollection } from '../hooks/useCollection';
 import { Company, Score, Alert } from '../types/models';
 import { StatCard } from '../components/StatCard';
@@ -40,7 +40,7 @@ export default function Dashboard() {
   async function testTelegram() {
     setTelegramStatus('checking');
     try {
-      const fn = httpsCallable<unknown, { ok: boolean }>(functions, 'testTelegramConnection');
+      const fn = backendCallable<unknown, { ok: boolean }>('testTelegramConnection');
       const res = await fn();
       setTelegramStatus(res.data.ok ? 'ok' : 'fail');
     } catch {

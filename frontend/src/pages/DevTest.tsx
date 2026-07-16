@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../lib/firebase';
+import { backendCallable } from '../lib/backend';
 
 /**
  * صفحة اختبار المرحلة 1 فقط - متاحة في وضع التطوير (VITE_DEV_MODE=true).
@@ -28,7 +27,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'testCompanyFetch');
+      const fn = backendCallable('testCompanyFetch');
       const res = await fn();
       setResult(res.data);
     } catch (err) {
@@ -42,7 +41,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'getDevRawResponses');
+      const fn = backendCallable('getDevRawResponses');
       const res = await fn({ limit: 10 });
       setRawResponses(res.data);
     } catch (err) {
@@ -56,7 +55,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'manualRefreshCompanies');
+      const fn = backendCallable('manualRefreshCompanies');
       const res = await fn();
       setCompaniesResult(res.data);
     } catch (err) {
@@ -70,7 +69,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'manualRefreshQuotes');
+      const fn = backendCallable('manualRefreshQuotes');
       const res = await fn();
       setQuotesResult(res.data);
     } catch (err) {
@@ -84,7 +83,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'manualRefreshFinancials');
+      const fn = backendCallable('manualRefreshFinancials');
       const res = await fn({ symbol: '2222' });
       setFinancialsResult(res.data);
     } catch (err) {
@@ -98,7 +97,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'manualRefreshDividends');
+      const fn = backendCallable('manualRefreshDividends');
       const res = await fn({ symbol: '2222' });
       setDividendsResult(res.data);
     } catch (err) {
@@ -112,7 +111,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'manualRefreshHistorical');
+      const fn = backendCallable('manualRefreshHistorical');
       const res = await fn({ symbol: '2222' });
       setHistoricalResult(res.data);
     } catch (err) {
@@ -126,7 +125,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'computeTechnicalIndicators');
+      const fn = backendCallable('computeTechnicalIndicators');
       const res = await fn({ symbol: '2222' });
       setTechnicalResult(res.data);
     } catch (err) {
@@ -143,12 +142,12 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      await httpsCallable(functions, 'manualRefreshCompanies')();
+      await backendCallable('manualRefreshCompanies')();
       for (const symbol of FIVE_SECTOR_SYMBOLS) {
-        await httpsCallable(functions, 'manualRefreshQuotes')({ symbol });
-        await httpsCallable(functions, 'manualRefreshFinancials')({ symbol });
-        await httpsCallable(functions, 'manualRefreshDividends')({ symbol });
-        await httpsCallable(functions, 'manualRefreshHistorical')({ symbol });
+        await backendCallable('manualRefreshQuotes')({ symbol });
+        await backendCallable('manualRefreshFinancials')({ symbol });
+        await backendCallable('manualRefreshDividends')({ symbol });
+        await backendCallable('manualRefreshHistorical')({ symbol });
       }
     } catch (err) {
       setError((err as Error).message);
@@ -161,7 +160,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'computeInvestmentScoreBatch');
+      const fn = backendCallable('computeInvestmentScoreBatch');
       const res = await fn({ symbols: FIVE_SECTOR_SYMBOLS });
       setScoreResult(res.data);
     } catch (err) {
@@ -175,7 +174,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'testTelegramConnection');
+      const fn = backendCallable('testTelegramConnection');
       const res = await fn();
       setTelegramResult(res.data);
     } catch (err) {
@@ -189,7 +188,7 @@ export default function DevTest() {
     setLoading(true);
     setError(null);
     try {
-      const fn = httpsCallable(functions, 'runAlertCheck');
+      const fn = backendCallable('runAlertCheck');
       const res = await fn({ symbol: '2222' });
       setAlertCheckResult(res.data);
     } catch (err) {

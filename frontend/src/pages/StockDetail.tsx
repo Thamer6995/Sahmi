@@ -11,8 +11,8 @@ import {
   where,
   limit as fbLimit,
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import { backendCallable } from '../lib/backend';
 import { Company, Quote, Ratios, FinancialPeriod, Dividend, Score, Alert, HistoricalBar } from '../types/models';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { PriceChart } from '../components/PriceChart';
@@ -74,7 +74,7 @@ export default function StockDetail() {
     const alertsQuery = query(collection(db, 'alerts'), where('symbol', '==', symbol), orderBy('createdAt', 'desc'), fbLimit(10));
     const unsubAlerts = onSnapshot(alertsQuery, (snap) => setAlerts(snap.docs.map((d) => d.data() as Alert)));
 
-    httpsCallable<{ symbol: string }, TechnicalIndicators>(functions, 'computeTechnicalIndicators')({ symbol })
+    backendCallable<{ symbol: string }, TechnicalIndicators>('computeTechnicalIndicators')({ symbol })
       .then((res) => setTechnical(res.data))
       .catch(() => setTechnical(null));
 
@@ -92,12 +92,12 @@ export default function StockDetail() {
     setRefreshing(true);
     try {
       await Promise.all([
-        httpsCallable(functions, 'manualRefreshQuotes')({ symbol }),
-        httpsCallable(functions, 'manualRefreshFinancials')({ symbol }),
-        httpsCallable(functions, 'manualRefreshDividends')({ symbol }),
-        httpsCallable(functions, 'manualRefreshHistorical')({ symbol }),
+        backendCallable('manualRefreshQuotes')({ symbol }),
+        backendCallable('manualRefreshFinancials')({ symbol }),
+        backendCallable('manualRefreshDividends')({ symbol }),
+        backendCallable('manualRefreshHistorical')({ symbol }),
       ]);
-      await httpsCallable(functions, 'runAlertCheck')({ symbol });
+      await backendCallable('runAlertCheck')({ symbol });
     } finally {
       setRefreshing(false);
     }

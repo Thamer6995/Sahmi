@@ -4,13 +4,40 @@
 (باقة Starter)، مع نظام تقييم استثماري (Investment Score) وإرسال تنبيهات
 عبر Telegram. التطبيق للاستخدام الشخصي فقط - حساب واحد، بدون تسجيل عام.
 
-> ⚠️ **حالة المشروع الحالية:** المراحل 1-7 جاهزة: كامل خط جلب البيانات
-> من SAHMK، نظام Investment Score (100 نقطة، بأوزان قابلة للتعديل فعليًا
-> من الإعدادات)، تكامل Telegram الكامل، وكل صفحات الواجهة الستة (لوحة
-> التحكم، مستكشف الأسهم، صفحة السهم، قائمة المراقبة، تقويم التوزيعات،
-> الإعدادات) بالعربية RTL وبدون أي بيانات وهمية - مع 29 اختبار وحدة Backend.
-> المرحلة 8 (الجدولة والنشر النهائي) هي الأخيرة المتبقية - راجع قسم
-> "خارطة الطريق" أسفله.
+> ⚠️ **حالة المشروع الحالية:** كل المراحل الثمانية مكتملة معماريًا (خط
+> جلب البيانات، Investment Score، Telegram، الواجهات الست، والجدولة).
+> المشروع جاهز للنشر الفعلي بعد إعداد مفتاح SAHMK حقيقي، بوت Telegram،
+> ونشر الخادم على Render (القسم 5) - راجع "خارطة الطريق" (القسم 10).
+
+---
+
+## 0. ⚠️ تنويه معماري مهم: لماذا الخادم على Render وليس Firebase Functions؟
+
+الخطة الأصلية كانت استضافة كل الـ Backend على **Firebase Cloud
+Functions**. أثناء النشر الفعلي، تبيّن أن ذلك يتطلب **خطة Blaze**
+(الفوترة) إجباريًا - ليس بسبب التكلفة، بل لأن أي Cloud Function تتصل
+بخدمة خارجية (SAHMK، Telegram) أو تعمل بجدولة تحتاج حساب فوترة مربوط
+بالمشروع حتى لو كان الاستخدام الفعلي ضمن الحصة المجانية بالكامل.
+
+**فوترة Google Cloud الشخصية (غير التجارية) غير متاحة حاليًا في السعودية**
+إلا عبر شريك معتمد واحد (CNTXT)، وهو يقبل حاليًا حسابات **Business
+(Google Workspace) فقط** - "Individual (non-business) onboarding is
+temporarily unavailable" وقت كتابة هذا الملف.
+
+**الحل المعتمد:** إبقاء كل ما هو مجاني تمامًا على Firebase (Firestore
++ Authentication + Hosting - لا تحتاج Blaze إطلاقًا)، ونقل منطق الخادم
+فقط (SahmkService، التقييم، Telegram، الجدولة) إلى **Render.com** -
+منصة استضافة مستقلة عن Google Cloud، مجانية، بدون قيود جغرافية أو
+ريسيلر. الجدولة (Cron) تعمل الآن عبر **GitHub Actions** بدل Cloud
+Scheduler، لنفس السبب.
+
+**المنطق البرمجي (SahmkService، القوائم المالية، التقييم، Telegram،
+الاستعلامات) لم يتغيّر إطلاقًا** - فقط طبقة النقل تغيّرت من Firebase
+Callable Functions إلى مسارات Express عادية، والمصادقة انتقلت من سياق
+`onCall` التلقائي إلى التحقق اليدوي من Firebase ID Token.
+
+إن أصبحت فوترة KSA الشخصية متاحة لاحقًا، العودة لـ Cloud Functions
+ممكنة لكنها ليست ضرورية - المعمارية الحالية تعمل بكامل الوظائف مجانًا.
 
 ---
 
@@ -19,10 +46,11 @@
 | الطبقة | التقنية |
 |---|---|
 | Frontend | React + TypeScript + Vite + Tailwind CSS (RTL) |
-| Backend | Firebase Cloud Functions (TypeScript) |
-| قاعدة البيانات | Firestore |
-| الجدولة | Firebase Scheduled Functions (Cloud Scheduler) |
-| الاستضافة | Firebase Hosting |
+| Backend | Express + TypeScript، مستضاف على **Render.com** |
+| قاعدة البيانات | Firestore (Firebase - خطة Spark المجانية) |
+| المصادقة | Firebase Authentication (حساب واحد، مجانية) |
+| الجدولة | GitHub Actions (cron) يستدعي مسارات `/internal/*` على الخادم |
+| الاستضافة (الواجهة) | Firebase Hosting (مجانية) |
 | مصدر البيانات | [SAHMK API](https://www.sahmk.sa/en/developers) - باقة Starter |
 | التنبيهات | Telegram Bot API |
 
@@ -53,7 +81,7 @@ Base URL: `https://app.sahmk.sa/api/v1` — Header: `X-API-Key`
 
 > ملاحظة أمانة: أسماء الحقول التفصيلية للاستجابات (خصوصًا historical/
 > financials/dividends) غير موثقة علنًا بأمثلة JSON كاملة. لذلك بُنيت
-> الـ TypeScript interfaces (`functions/src/services/sahmk/types.ts`)
+> الـ TypeScript interfaces (`server/src/services/sahmk/types.ts`)
 > بشكل متسامح (`passthrough` + حقول اختيارية) ويتم حفظ الاستجابة الخام
 > (raw response) في وضع التطوير فقط لمراجعتها وتثبيت الحقول الفعلية.
 >
@@ -65,11 +93,11 @@ Base URL: `https://app.sahmk.sa/api/v1` — Header: `X-API-Key`
 >
 > **حدود تقييم غير منصوص عليها رقميًا في الطلب الأصلي** (تركها الطلب
 > مفتوحة بصيغة "حتى N نقاط" دون تحديد الحدود الداخلية) اتُّخذت فيها
-> افتراضات معقولة وموثّقة داخل الكود مباشرة (`functions/src/scoring/`):
+> افتراضات معقولة وموثّقة داخل الكود مباشرة (`server/src/scoring/`):
 > حدود CAGR لنمو الأرباح (15%/10%)، نطاقات P/B وEarnings Yield، وحدود نمو
 > التوزيعات (95%/70%). عدّلها مباشرة في ملفات `quality.ts`/`valuation.ts`/
 > `dividend.ts` إن رغبت في معايير مختلفة - الأوزان بين الأقسام الأربعة
-> (35/25/25/15) نفسها قابلة للتعديل من الإعدادات لاحقًا كما هو مطلوب.
+> (35/25/25/15) نفسها قابلة للتعديل فعليًا من صفحة الإعدادات.
 
 ---
 
@@ -77,8 +105,13 @@ Base URL: `https://app.sahmk.sa/api/v1` — Header: `X-API-Key`
 
 ```
 Sahmi/
-├── frontend/            React + TS + Vite (RTL)
-├── functions/            Firebase Cloud Functions (TypeScript)
+├── frontend/             React + TS + Vite (RTL) - يُنشر على Firebase Hosting
+│   └── src/
+│       ├── lib/backend.ts      يستدعي الخادم (Render) مع Firebase ID Token
+│       ├── lib/firebase.ts     تهيئة Firebase (Auth + Firestore فقط - لا Functions)
+│       ├── pages/               لوحة التحكم، مستكشف الأسهم، صفحة السهم، ...
+│       └── components/
+├── server/               Express + TS - يُنشر على Render.com (مستقل عن Google Cloud)
 │   └── src/
 │       ├── services/sahmk/     SahmkService + http client + cache + rate tracker + mappers
 │       ├── services/telegram/  TelegramService + messageBuilder (بدون أي صيغة توصية شراء)
@@ -87,29 +120,30 @@ Sahmi/
 │       ├── technical/          SMA/RSI/52-week + اختبارات وحدة
 │       ├── jobs/                منطق التحديث والتقييم والتنبيه (batch + progress)
 │       ├── repo/                طبقة الكتابة/القراءة من Firestore (كل الـ collections)
-│       ├── scheduled/          (قادم - المرحلة 8: تشغيل jobs/ على جدول)
-│       ├── https/              دوال Callable (اختبار/فحص/تحديث يدوي)
-│       ├── config/secrets.ts   تعريف Firebase Secrets والقيم غير الحساسة
-│       └── utils/              auth guard, rate limit, logger (يحجب الأسرار), batchRunner
+│       ├── scheduled/          دوال الفحص الدوري (تُستدعى من routes/internal.ts)
+│       ├── routes/              api.ts (مسارات محمية بمصادقة المستخدم) + internal.ts (محمية بسر cron)
+│       ├── middleware/          auth.ts (تحقق Firebase ID Token)، cronAuth.ts، errorHandler.ts
+│       ├── config/               env.ts (متغيرات البيئة) + firebaseAdmin.ts (تهيئة Admin SDK)
+│       └── utils/                logger (يحجب الأسرار)، rateLimit، batchRunner، validate
+├── .github/workflows/scheduled-scans.yml   جدولة Cron عبر GitHub Actions (بديل Cloud Scheduler)
+├── render.yaml            تعريف خدمة Render (Blueprint) لتسهيل النشر
 ├── firestore.rules
 ├── firestore.indexes.json
-├── firebase.json
+├── firebase.json          Hosting + Firestore فقط (لا قسم functions بعد الآن)
 ├── .env.example
 └── README.md
 ```
 
 > **Collections تشغيلية إضافية** غير مذكورة في المواصفة الأصلية لكن
-> ضرورية للتشغيل الفعلي: `apiUsage` (عداد الاستخدام اليومي التقريبي)
-> و`syncJobs` (تتبع تقدم كل عملية تحديث بالجملة - batch processing -
-> حتى لا يوقف فشل سهم واحد بقية العملية، وليظهر التقدم لاحقًا في لوحة
-> الإدارة).
+> ضرورية للتشغيل الفعلي: `apiUsage` (عداد الاستخدام اليومي التقريبي)،
+> `syncJobs` (تتبع تقدم كل عملية تحديث بالجملة)، و`_scheduleState`
+> (يمنع تكرار تنفيذ الفحص اليومي رغم استدعاء GitHub Actions كل 30 دقيقة).
 >
-> **إعدادات Backend الافتراضية** (قبل بناء صفحة الإعدادات في المرحلة 7):
+> **إعدادات Backend الافتراضية** (قبل تعديلها من صفحة `/settings`):
 > `minimumAlertScore=80`، `alertCooldownDays=7`، `telegramEnabled=true`
-> (`functions/src/repo/settingsRepo.ts`) - تُقرأ من مستند `settings/app`
-> إن وُجد، وإلا تُستخدم هذه القيم الافتراضية تلقائيًا. حقل `alerts.telegramMessageId`
-> إضافة غير مذكورة صراحة في المواصفة لكنها تُلبّي متطلب "تسجيل Telegram
-> message ID إن أمكن".
+> (`server/src/repo/settingsRepo.ts`) - تُقرأ من مستند `settings/app`
+> إن وُجد، وإلا تُستخدم هذه القيم الافتراضية. حقل `alerts.telegramMessageId`
+> إضافة تُلبّي متطلب "تسجيل Telegram message ID إن أمكن".
 
 ---
 
@@ -117,8 +151,10 @@ Sahmi/
 
 ### المتطلبات
 - Node.js 20+
-- حساب Firebase (Blaze plan مطلوب لتشغيل Cloud Functions خارجيًا مع Secrets، الاستخدام الفعلي سيبقى ضمن الحد المجاني تقريبًا لتطبيق شخصي)
-- Firebase CLI: `npm install -g firebase-tools`
+- حساب Firebase (خطة Spark المجانية تكفي تمامًا - لا حاجة لـ Blaze)
+- حساب [Render.com](https://render.com) (مجاني) لاستضافة الخادم
+- حساب GitHub (لتشغيل جدولة Cron المجانية عبر Actions)
+- Firebase CLI: `npm install -g firebase-tools` (للـ Hosting/Firestore فقط)
 - مفتاح SAHMK API (باقة Starter)
 - بوت Telegram (خطوات الإنشاء في القسم 7)
 
@@ -127,62 +163,85 @@ Sahmi/
 ```bash
 # 1) تثبيت الاعتماديات
 npm install --workspace frontend
-npm install --workspace functions
+npm install --workspace server
 
-# 2) تسجيل الدخول وربط مشروع Firebase
+# 2) تسجيل الدخول وربط مشروع Firebase (Hosting/Firestore/Auth فقط)
 firebase login
-firebase use --add           # اختر مشروعك أو أنشئ واحدًا جديدًا من Firebase Console
-# عدّل .firebaserc ضع معرف مشروعك الحقيقي بدل REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID
+firebase use --add
+# عدّل .firebaserc ضع معرف مشروعك الحقيقي
 
 # 3) إعداد متغيرات الواجهة (frontend/.env.local)
 cp frontend/.env.example frontend/.env.local
-# املأ القيم من: Firebase Console > Project Settings > SDK setup and configuration
-# أضف أيضًا: VITE_DEV_MODE=true (فقط أثناء التطوير)
+# املأ قيم Firebase من: Project Settings > SDK setup and configuration
+# VITE_BACKEND_URL=http://localhost:8080 (أثناء التطوير المحلي)
 
-# 4) تشغيل الواجهة محليًا
+# 4) إعداد متغيرات الخادم (server/.env)
+cp server/.env.example server/.env
+# املأ SAHMK_API_KEY, TELEGRAM_BOT_TOKEN/CHAT_ID, CRON_SECRET (أي قيمة عشوائية طويلة)
+# ولّد FIREBASE_SERVICE_ACCOUNT_BASE64 كما في القسم 5
+
+# 5) تشغيل الواجهة والخادم محليًا (في نافذتي طرفية منفصلتين)
 npm run dev:frontend
+npm run build --workspace server && node server/lib/index.js
+# أو أثناء التطوير: npm run dev --workspace server (يعيد البناء تلقائيًا عند التعديل)
 
-# 5) تشغيل Functions محليًا عبر المحاكي (Emulator)
-firebase emulators:start --only functions,firestore,auth
-
-# 6) تشغيل اختبارات الوحدة (المؤشرات الفنية: SMA/RSI/52-week)
-npm run test --workspace functions
+# 6) تشغيل اختبارات الوحدة (المؤشرات الفنية + التقييم + التنبيهات)
+npm run test:server
 ```
-
-### إعداد الأسرار الحقيقية (Backend فقط - لا تذهب أبدًا للـ Frontend)
-
-```bash
-firebase functions:secrets:set SAHMK_API_KEY
-firebase functions:secrets:set TELEGRAM_BOT_TOKEN
-firebase functions:secrets:set TELEGRAM_CHAT_ID
-```
-
-سيُطلب منك إدخال القيمة تفاعليًا (لا تُكتب في أي ملف). لتفعيل وضع
-التطوير (لعرض Raw Response لمراجعة الحقول) عند التشغيل عبر المحاكي فقط:
-
-```bash
-# في functions/.env.local (لا يُرفع لأي مستودع - ضمن .gitignore)
-DEV_MODE=true
-```
-
-اجعل `DEV_MODE=false` (أو احذف المتغير) قبل أي نشر للإنتاج.
-
-`APP_URL` (رابط زر "فتح السهم في التطبيق" داخل رسائل Telegram) وباقي
-القيم غير الحساسة (`SAHMK_BASE_URL`, `APP_TIMEZONE`) تُضبط بنفس الطريقة
-في `functions/.env` (للتطوير) أو `functions/.env.<project-id>` (للإنتاج
-عند النشر) - وليست أسرارًا فيُكتبان مباشرة، بخلاف SAHMK_API_KEY/TELEGRAM_*.
 
 ---
 
-## 5. أين أضع كل سر؟
+## 5. إعداد الخادم (Render) وأين أضع كل سر
 
-| السر | أين يوضع | كيف يُقرأ |
+### أ. توليد مفتاح خدمة Firebase (Service Account)
+
+الخادم يحتاج صلاحية الوصول لـ Firestore وFirebase Auth من خارج بيئة
+Google Cloud، عبر حساب خدمة:
+
+1. Firebase Console → ⚙️ Project Settings → تبويب **Service Accounts**
+2. اضغط **Generate new private key** → يُنزَّل ملف JSON
+3. حوّله إلى Base64 (لوضعه كمتغيّر بيئة واحد بدل رفع ملف):
+   ```bash
+   base64 -w0 service-account.json
+   ```
+4. احتفظ بالناتج - هذا هو `FIREBASE_SERVICE_ACCOUNT_BASE64`
+
+### ب. نشر الخادم على Render
+
+1. ادفع الكود لمستودع GitHub (إن لم يكن موجودًا هناك أصلًا)
+2. من [render.com](https://dashboard.render.com) → **New** → **Web Service**
+3. اربط المستودع - Render سيكتشف `render.yaml` تلقائيًا (Root Directory: `server`)
+4. من تبويب **Environment**، املأ المتغيرات المطلوبة (راجع `server/.env.example`):
+
+| المتغيّر | القيمة |
+|---|---|
+| `FIREBASE_SERVICE_ACCOUNT_BASE64` | الناتج من الخطوة (أ) |
+| `SAHMK_API_KEY` | مفتاحك من SAHMK |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | من القسم 7 |
+| `CRON_SECRET` | قيمة عشوائية طويلة تولّدها بنفسك، مثل: `openssl rand -hex 32` |
+| `FRONTEND_ORIGIN` | رابط Firebase Hosting (مثال: `https://sahmi-e3e49.web.app`) |
+| `APP_URL` | نفس رابط Hosting (لبناء زر Telegram) |
+
+5. اضغط **Deploy** - بعد النجاح ستحصل على رابط مثل `https://sahmi-server.onrender.com`
+6. ضع هذا الرابط في `frontend/.env.local` (`VITE_BACKEND_URL`) وأعد بناء ونشر الواجهة (القسم 11)
+
+> **ملاحظة عن الخطة المجانية في Render:** الخدمة المجانية "تنام" بعد
+> ~15 دقيقة من عدم الاستخدام، ويأخذ أول طلب بعدها ~30-50 ثانية
+> للاستيقاظ. جدولة GitHub Actions (كل 30 دقيقة) تُبقيها نشطة تلقائيًا
+> تقريبًا معظم الوقت، وأي تأخير بسيط في طلب يدوي من الواجهة غير ضار
+> لتطبيق شخصي.
+
+### جدول الأسرار الكامل
+
+| السر | أين يوضع | ملاحظة |
 |---|---|---|
-| `SAHMK_API_KEY` | Firebase Secret (`firebase functions:secrets:set`) | `functions/src/config/secrets.ts` → `SAHMK_API_KEY.value()` داخل Functions فقط |
-| `TELEGRAM_BOT_TOKEN` | Firebase Secret | نفس الطريقة، يُستخدم في TelegramService (Backend فقط) |
-| `TELEGRAM_CHAT_ID` | Firebase Secret | نفس الطريقة |
-| `VITE_FIREBASE_*` | `frontend/.env.local` | معرّفات Firebase العلنية فقط (ليست أسرارًا حساسة) |
-| `APP_URL` | `functions/.env` أو `functions/.env.<project-id>` (غير سرّي) | يُستخدم فقط لبناء رابط زر Telegram |
+| `SAHMK_API_KEY` | Render → Environment | لا يصل الواجهة أبدًا |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Render → Environment | نفس الشيء |
+| `FIREBASE_SERVICE_ACCOUNT_BASE64` | Render → Environment | صلاحية كاملة على المشروع - لا تُشارك |
+| `CRON_SECRET` | Render → Environment **و** GitHub → Settings → Secrets and variables → Actions | نفس القيمة في المكانين |
+| `RENDER_APP_URL` | GitHub → Settings → Secrets and variables → Actions → **Variables** | رابط الخادم (ليس سرًا، لكنه متغيّر بيئة للـ workflow) |
+| `VITE_FIREBASE_*` | `frontend/.env.local` | معرّفات Firebase العلنية (ليست حساسة) |
+| `VITE_BACKEND_URL` | `frontend/.env.local` | رابط خادم Render |
 
 **لا يوجد أي مفتاح API أو توكن Telegram في كود الـ Frontend أو في أي ملف
 يُنشر للمتصفح.**
@@ -197,11 +256,12 @@ DEV_MODE=true
 2. من تبويب Users → Add user → أدخل بريدك وكلمة مرور قوية.
 3. سجّل الدخول من صفحة `/login` في الواجهة بهذه البيانات.
 
-كل دوال Functions (باستثناء الجدولة الداخلية) تتحقق من `request.auth`
-وترفض أي طلب غير مصادَق (`unauthenticated`). قواعد Firestore
-(`firestore.rules`) تمنع أيضًا أي قراءة/كتابة بدون تسجيل دخول، وتمنع كل
-كتابة مباشرة من العميل على البيانات التشغيلية (تتم فقط من Functions عبر
-Admin SDK).
+الواجهة ترسل Firebase ID Token مع كل طلب للخادم (`Authorization: Bearer
+<token>`)، والخادم يتحقق منه عبر `firebase-admin/auth` قبل تنفيذ أي
+مسار (`server/src/middleware/auth.ts`). قواعد Firestore
+(`firestore.rules`) تمنع أيضًا أي قراءة/كتابة مباشرة بدون تسجيل دخول،
+وتمنع كل كتابة مباشرة من العميل على البيانات التشغيلية (تتم فقط من
+الخادم عبر Admin SDK).
 
 ---
 
@@ -215,7 +275,7 @@ Admin SDK).
    - أرسل أي رسالة للبوت.
    - افتح في المتصفح: `https://api.telegram.org/bot<التوكن>/getUpdates`
    - ابحث عن `"chat":{"id": ...}` في الاستجابة — هذا الرقم هو `TELEGRAM_CHAT_ID`.
-6. ضع القيمتين عبر `firebase functions:secrets:set` كما في القسم 5.
+6. ضع القيمتين في متغيرات بيئة Render (القسم 5).
 7. بعد النشر، اضغط زر "اختبار اتصال تيليجرام" من صفحة الإعدادات (`/settings`) للتأكد من نجاح الربط.
 
 ---
@@ -231,7 +291,7 @@ Admin SDK).
 
 ---
 
-## 8ب. صفحات الواجهة (المرحلة 7)
+## 9. صفحات الواجهة
 
 | المسار | الصفحة | الملاحظات |
 |---|---|---|
@@ -242,13 +302,13 @@ Admin SDK).
 | `/dividends` | تقويم التوزيعات | فلترة حسب الشهر والقطاع، الأيام المتبقية |
 | `/settings` | الإعدادات | أوزان التقييم (تُطبَّق فعليًا عبر إعادة توزين النقاط - انظر `investmentScore.ts`)، الحد الأدنى للتنبيه، Cooldown، وقت الفحص، تفعيل Telegram، القطاعات المستبعدة، أزرار تحديث/فحص/اختبار |
 
-كل الصفحات تقرأ من Firestore مباشرة (`onSnapshot`/`getDocs`) بعد تسجيل الدخول - لا Mock Data في أي مكان. صفحة `/dev-test` (أزرار اختبار المراحل 1-6) لا تظهر إلا إذا `VITE_DEV_MODE=true`، ويجب إبقاؤها `false` في بناء الإنتاج.
+كل الصفحات تقرأ من Firestore مباشرة (`onSnapshot`/`getDocs`) بعد تسجيل الدخول - لا Mock Data في أي مكان. صفحة `/dev-test` (أزرار اختبار كل مرحلة) لا تظهر إلا إذا `VITE_DEV_MODE=true`، ويجب إبقاؤها `false` في بناء الإنتاج.
 
-> ملاحظة بناء: حجم حزمة JS النهائية ~670KB (غير مضغوطة) - أعلى من التحذير الافتراضي لـ Vite (500KB)، لكنه غير مهم عمليًا لتطبيق شخصي بحساب واحد لا يحتاج تحسين تحميل أولي دقيق؛ لم يُضَف أي تقسيم كود (code-splitting) تجنبًا لتعقيد غير ضروري.
+> ملاحظة بناء: حجم حزمة JS النهائية ~670KB (غير مضغوطة) - أعلى من التحذير الافتراضي لـ Vite (500KB)، لكنه غير مهم عمليًا لتطبيق شخصي بحساب واحد؛ لم يُضَف أي تقسيم كود (code-splitting) تجنبًا لتعقيد غير ضروري.
 
 ---
 
-## 9. خارطة الطريق (المراحل القادمة)
+## 10. خارطة الطريق (المراحل)
 
 | المرحلة | المحتوى | الحالة |
 |---|---|---|
@@ -259,62 +319,64 @@ Admin SDK).
 | 5 | نظام Investment Score الكامل | ✅ جاهزة |
 | 6 | تكامل Telegram والتنبيهات | ✅ جاهزة |
 | 7 | واجهات التطبيق الكاملة (لوحة تحكم، مستكشف، صفحة سهم...) | ✅ جاهزة |
-| 8 | الجدولة (Scheduled Functions) والنشر النهائي | ✅ جاهزة |
+| 8 | الجدولة (GitHub Actions بدل Cloud Scheduler) والنشر | ✅ جاهزة |
 
-كل المراحل الثمانية مكتملة الآن. المشروع جاهز للنشر الفعلي (يتطلب فقط مفتاح SAHMK حقيقي وبوت Telegram - القسمان 5 و7).
-
----
-
-## 10. الجدولة (Scheduled Functions)
-
-| الدالة | الجدول | الوصف |
-|---|---|---|
-| `dailyPriceAndAlertScan` | كل 30 دقيقة (تُنفّذ فعليًا مرة واحدة يوميًا) | تُقارن الوقت الحالي بتوقيت الرياض مع `settings.scanSchedule` (افتراضيًا `17:30`)؛ عند بلوغه: تحديث الأسعار بالجملة + OHLCV التزايدي + حساب التقييم وتطبيق التنبيهات لكل الأسهم (أو قائمة المراقبة فقط حسب `watchlistOnly`) |
-| `weeklyFinancialsScan` | الأحد 3:00 صباحًا (توقيت الرياض) | تحديث دليل الشركات ثم القوائم المالية والنسب |
-| `dailyDividendsScan` | يوميًا 4:00 صباحًا (توقيت الرياض) | تحديث سجل التوزيعات |
-
-**لماذا "كل 30 دقيقة" وليس جدولًا ثابتًا لفحص الأسعار؟** لأن Cloud
-Scheduler يحتاج تعبير cron ثابتًا يُحدَّد عند النشر، بينما المطلوب أن
-"وقت الفحص" يبقى قابلًا للتعديل فعليًا من صفحة الإعدادات دون إعادة نشر.
-الحل: تشغيل خفيف كل 30 دقيقة يتحقق فقط "هل حان الوقت المضبوط ولم يُنفَّذ
-الفحص اليوم بعد؟" (`_scheduleState` في Firestore) - التنفيذ الفعلي (وكل
-استهلاك SAHMK API) يحدث مرة واحدة فقط يوميًا كما هو مطلوب. القوائم
-المالية والتوزيعات لم تُطلب كأوقات قابلة للتعديل، فاستُخدم جدول Cloud
-Scheduler ثابت مباشرة (أبسط وأدق).
-
-**متطلبات الجدولة:** تفعيل Cloud Scheduler API وCloud Pub/Sub API في
-مشروع Firebase (يتطلبان خطة Blaze - ادفع حسب الاستخدام، لكن الاستخدام
-الفعلي لتطبيق شخصي يبقى ضمن الحد المجاني تقريبًا). يُفعَّلان تلقائيًا
-غالبًا عند أول `firebase deploy --only functions`، وإلا فعّلهما يدويًا من
-Google Cloud Console.
+كل المراحل الثمانية مكتملة معماريًا. المتبقي فعليًا: نشر الخادم على
+Render بمفتاح SAHMK وبوت Telegram حقيقيين (القسم 5).
 
 ---
 
-## 11. النشر على Firebase
+## 11. الجدولة (GitHub Actions بدل Cloud Scheduler)
+
+| المسار الداخلي | الجدول (UTC) | ما يعادله بتوقيت الرياض | الوصف |
+|---|---|---|---|
+| `/internal/daily-scan` | كل 30 دقيقة (`3,33 * * * *`) | يُنفَّذ فعليًا مرة واحدة يوميًا | يقارن الوقت الحالي بتوقيت الرياض مع `settings.scanSchedule` (افتراضيًا `17:30`)؛ عند بلوغه: تحديث الأسعار بالجملة + OHLCV التزايدي + حساب التقييم وتطبيق التنبيهات |
+| `/internal/weekly-financials` | الأحد `0 0 * * 0` | الأحد 3:00 صباحًا | تحديث دليل الشركات ثم القوائم المالية والنسب |
+| `/internal/daily-dividends` | يوميًا `0 1 * * *` | 4:00 صباحًا | تحديث سجل التوزيعات |
+
+الملف: `.github/workflows/scheduled-scans.yml`. كل الطلبات محمية بـ
+`X-Cron-Secret` (نفس قيمة `CRON_SECRET` في Render).
+
+**لماذا "كل 30 دقيقة" وليس جدولًا ثابتًا لفحص الأسعار؟** لأن جدولة أي
+منصة (GitHub Actions أو Cloud Scheduler) تحتاج تعبير cron ثابتًا يُحدَّد
+في ملف، بينما المطلوب أن "وقت الفحص" يبقى قابلًا للتعديل فعليًا من صفحة
+الإعدادات دون تعديل أي ملف. الحل: استدعاء خفيف كل 30 دقيقة يتحقق فقط
+"هل حان الوقت المضبوط ولم يُنفَّذ الفحص اليوم بعد؟" (`_scheduleState` في
+Firestore) - التنفيذ الفعلي (وكل استهلاك SAHMK API) يحدث مرة واحدة فقط
+يوميًا. القوائم المالية والتوزيعات لم تُطلب كأوقات قابلة للتعديل، فاستُخدم
+جدول ثابت مباشرة.
+
+**إعداد GitHub Actions:** من إعدادات المستودع → **Settings → Secrets
+and variables → Actions**:
+- تبويب **Variables**: أضف `RENDER_APP_URL` = رابط خادمك على Render
+- تبويب **Secrets**: أضف `CRON_SECRET` = نفس القيمة المضبوطة في Render
+
+يمكن تشغيل الجدولة يدويًا للاختبار من تبويب **Actions** في GitHub
+(`workflow_dispatch`) بدل انتظار الموعد.
+
+---
+
+## 12. النشر الكامل
+
+### أ. الخادم (Render) - انظر القسم 5 بالتفصيل
+
+### ب. الواجهة (Firebase Hosting)
 
 ```bash
-# 1) تثبيت الاعتماديات وبناء المشروعين
 npm install --workspace frontend
-npm install --workspace functions
+# تأكد أن frontend/.env.local يحتوي VITE_BACKEND_URL برابط Render الفعلي
 npm run build:frontend
-npm run build:functions
-
-# 2) التأكد من ضبط الأسرار (مرة واحدة فقط، أو عند تغييرها)
-firebase functions:secrets:set SAHMK_API_KEY
-firebase functions:secrets:set TELEGRAM_BOT_TOKEN
-firebase functions:secrets:set TELEGRAM_CHAT_ID
-
-# 3) (اختياري) ضبط APP_URL الفعلي بعد معرفة رابط Hosting
-#    في functions/.env.<project-id>:  APP_URL=https://<project-id>.web.app
-#    تأكد أيضًا أن DEV_MODE غير مضبوط أو = false في بيئة الإنتاج
-
-# 4) النشر الكامل
-firebase deploy --only hosting,functions,firestore:rules,firestore:indexes
+firebase deploy --only hosting,firestore:rules,firestore:indexes
 ```
 
-بعد أول نشر: أنشئ حساب المصادقة الوحيد (القسم 6)، ثم من `/settings`
-اضغط "تحديث يدوي" لأول تعبئة لدليل الشركات والأسعار، و"اختبار اتصال
-تيليجرام" للتأكد من الربط. الفحص المجدول اليومي سيبدأ تلقائيًا بعدها.
+### ج. الجدولة (GitHub Actions) - انظر القسم 11
+
+### د. بعد أول نشر كامل
+
+1. أنشئ حساب المصادقة الوحيد (القسم 6)
+2. سجّل دخول → من `/settings` اضغط **"تحديث يدوي"** (أول تعبئة لدليل الشركات والأسعار)
+3. اضغط **"اختبار اتصال تيليجرام"** للتأكد من الربط
+4. الفحص المجدول سيبدأ تلقائيًا حسب جدول GitHub Actions (القسم 11)
 
 ---
 

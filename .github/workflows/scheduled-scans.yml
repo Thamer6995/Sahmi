@@ -1,0 +1,50 @@
+name: Sahmi Scheduled Scans
+
+# يستبدل هذا الملف Firebase Scheduled Functions / Cloud Scheduler - تحديدًا
+# لأن Cloud Functions تتطلب خطة Blaze، وفوترة Google Cloud الشخصية غير
+# متاحة حاليًا في السعودية إلا عبر شريك معتمد (CNTXT) يقبل حسابات Business
+# فقط. GitHub Actions يوفّر جدولة (cron) مجانية بديلة تستدعي الخادم
+# المستضاف على Render عبر مسارات /internal/* المحمية بسر مشترك.
+#
+# المتطلبات (Settings > Secrets and variables > Actions):
+#   - Variable: RENDER_APP_URL   (مثال: https://sahmi-server.onrender.com)
+#   - Secret:   CRON_SECRET      (نفس القيمة المضبوطة في متغيرات بيئة Render)
+
+on:
+  schedule:
+    # فحص الأسعار والتنبيهات: كل 30 دقيقة (يتحقق داخليًا من settings.scanSchedule
+    # بتوقيت الرياض قبل تنفيذ أي شيء فعليًا - انظر server/src/scheduled/dailyPriceAndAlertScan.ts)
+    - cron: '3,33 * * * *'
+    # القوائم المالية والنسب: أسبوعيًا - الأحد 00:00 UTC (= 3:00 صباحًا بتوقيت الرياض)
+    - cron: '0 0 * * 0'
+    # التوزيعات: يوميًا 01:00 UTC (= 4:00 صباحًا بتوقيت الرياض)
+    - cron: '0 1 * * *'
+  workflow_dispatch: {} # تشغيل يدوي من تبويب Actions لأغراض الاختبار
+
+jobs:
+  daily-price-and-alert-scan:
+    if: github.event.schedule == '3,33 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily price + alert scan
+        run: |
+          curl -sS -f -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-scan" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
+
+  weekly-financials-scan:
+    if: github.event.schedule == '0 0 * * 0' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger weekly financials scan
+        run: |
+          curl -sS -f -X POST "${{ vars.RENDER_APP_URL }}/internal/weekly-financials" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
+
+  daily-dividends-scan:
+    if: github.event.schedule == '0 1 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily dividends scan
+        run: |
+          curl -sS -f -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-dividends" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"

@@ -3,9 +3,9 @@ dist/
 build/
 .env
 .env.local
-functions/lib/
-functions/.env
-functions/.env.*
+server/lib/
+server/.env
+server/.env.*
 frontend/dist/
 .firebase/
 firebase-debug.log
