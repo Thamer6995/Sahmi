@@ -32,19 +32,24 @@ jobs:
     if: github.event.schedule == '3,33 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger daily price + alert scan
+      # الأسعار (Bulk) سريعة، لكن البيانات التاريخية مقسّمة لدفعات على
+      # السيرفر (انظر server/src/scheduled/dailyPriceAndAlertScan.ts) لنفس
+      # سبب weekly-financials-scan. نكرر الاستدعاء فقط طالما "active=true"
+      # (دورة فعلية شغّالة) - إذا لم يحن وقت الفحص المضبوط بعد، ننجح فورًا
+      # دون انتظار (الجدولة نفسها ستستدعينا مرة أخرى خلال 30 دقيقة).
+      - name: Trigger daily price + alert scan (loop only while active)
         run: |
-          for i in $(seq 1 10); do
+          for i in $(seq 1 80); do
             response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-scan" \
               -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
             echo "$response"
-            if [ -n "$response" ]; then
+            active=$(echo "$response" | jq -r '.active // false' 2>/dev/null || echo "false")
+            if [ "$active" != "true" ]; then
               exit 0
             fi
-            echo "لا يوجد رد (على الأغلب الخدمة كانت نائمة) - إعادة محاولة..." >&2
-            sleep 10
+            sleep 5
           done
-          echo "daily-scan لم يرد بعد عدة محاولات." >&2
+          echo "daily-scan لم يكتمل خلال ميزانية إعادة المحاولة." >&2
           exit 1
 
   weekly-financials-scan:

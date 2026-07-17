@@ -55,3 +55,39 @@ export async function clearChunkProgress(jobKey: string): Promise<void> {
     .doc(jobKey)
     .set({ remaining: FieldValue.delete(), total: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
+
+export interface DailyScanState {
+  date: string;
+  phase: 'historical' | 'alerts';
+  historicalRemaining: string[];
+  allSymbols: string[];
+  total: number;
+}
+
+const DAILY_SCAN_STATE_DOC = 'dailyScanCycle';
+
+/**
+ * حالة مخصّصة لدورة الفحص اليومي (dailyPriceAndAlertScan.ts) - متعددة
+ * المراحل (أسعار ثم بيانات تاريخية مقسّمة ثم تقييم/تنبيهات)، بخلاف
+ * getChunkProgress/saveChunkProgress أعلاه المخصّصة لمهمة بمرحلة واحدة فقط.
+ */
+export async function getDailyScanState(): Promise<DailyScanState | undefined> {
+  const db = getFirestore();
+  const snap = await db.collection('_scheduleState').doc(DAILY_SCAN_STATE_DOC).get();
+  const data = snap.data();
+  if (!data?.allSymbols) return undefined;
+  return data as DailyScanState;
+}
+
+export async function saveDailyScanState(state: DailyScanState): Promise<void> {
+  const db = getFirestore();
+  await db
+    .collection('_scheduleState')
+    .doc(DAILY_SCAN_STATE_DOC)
+    .set({ ...state, updatedAt: FieldValue.serverTimestamp() });
+}
+
+export async function clearDailyScanState(): Promise<void> {
+  const db = getFirestore();
+  await db.collection('_scheduleState').doc(DAILY_SCAN_STATE_DOC).delete();
+}
