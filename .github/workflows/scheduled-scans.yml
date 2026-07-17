@@ -59,7 +59,20 @@ jobs:
     if: github.event.schedule == '0 1 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger daily dividends scan
+      # مقسّم لدفعات على السيرفر (انظر server/src/scheduled/dailyDividendsScan.ts)
+      # لنفس سبب weekly-financials-scan أعلاه - نكرر الاستدعاء حتى done=true.
+      - name: Trigger daily dividends scan (loop until complete)
         run: |
-          curl -sS -f -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-dividends" \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
+          for i in $(seq 1 30); do
+            response=$(curl -sS -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-dividends" \
+              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}")
+            echo "$response"
+            done=$(echo "$response" | jq -r '.done // false')
+            if [ "$done" = "true" ]; then
+              echo "Daily dividends scan cycle completed."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Daily dividends scan did not complete within the retry budget." >&2
+          exit 1
