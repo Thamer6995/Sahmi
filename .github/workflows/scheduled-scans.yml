@@ -9,6 +9,12 @@ name: Sahmi Scheduled Scans
 # المتطلبات (Settings > Secrets and variables > Actions):
 #   - Variable: RENDER_APP_URL   (مثال: https://sahmi-server.onrender.com)
 #   - Secret:   CRON_SECRET      (نفس القيمة المضبوطة في متغيرات بيئة Render)
+#
+# ملاحظة مهمة: GitHub Actions يشغّل كل خطوة bash بخيار `-e` افتراضيًا، يعني
+# أي أمر يفشل (حتى عطل اتصال عابر بـ curl، مثل Render وهو "يستيقظ" من
+# الخمول) يوقف السكربت كامل فورًا. لذلك كل استدعاء curl هنا محاط بـ
+# `|| response=""` عمدًا حتى لا يوقف عطل اتصال مؤقت الحلقة كاملة - بدل ذلك
+# نعامله كرد فارغ ونعيد المحاولة.
 
 on:
   schedule:
@@ -28,8 +34,18 @@ jobs:
     steps:
       - name: Trigger daily price + alert scan
         run: |
-          curl -sS -f -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-scan" \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
+          for i in $(seq 1 10); do
+            response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-scan" \
+              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
+            echo "$response"
+            if [ -n "$response" ]; then
+              exit 0
+            fi
+            echo "لا يوجد رد (على الأغلب الخدمة كانت نائمة) - إعادة محاولة..." >&2
+            sleep 10
+          done
+          echo "daily-scan لم يرد بعد عدة محاولات." >&2
+          exit 1
 
   weekly-financials-scan:
     if: github.event.schedule == '0 0 * * 0' || github.event_name == 'workflow_dispatch'
@@ -41,16 +57,16 @@ jobs:
       # (مؤكَّد فعليًا من سجلات Render). نكرر الاستدعاء هنا حتى ترجع done=true.
       - name: Trigger weekly financials scan (loop until complete)
         run: |
-          for i in $(seq 1 30); do
-            response=$(curl -sS -X POST "${{ vars.RENDER_APP_URL }}/internal/weekly-financials" \
-              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}")
+          for i in $(seq 1 80); do
+            response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/weekly-financials" \
+              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
             echo "$response"
-            done=$(echo "$response" | jq -r '.done // false')
-            if [ "$done" = "true" ]; then
+            done_flag=$(echo "$response" | jq -r '.done // false' 2>/dev/null || echo "false")
+            if [ "$done_flag" = "true" ]; then
               echo "Weekly financials scan cycle completed."
               exit 0
             fi
-            sleep 3
+            sleep 5
           done
           echo "Weekly financials scan did not complete within the retry budget." >&2
           exit 1
@@ -63,16 +79,16 @@ jobs:
       # لنفس سبب weekly-financials-scan أعلاه - نكرر الاستدعاء حتى done=true.
       - name: Trigger daily dividends scan (loop until complete)
         run: |
-          for i in $(seq 1 30); do
-            response=$(curl -sS -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-dividends" \
-              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}")
+          for i in $(seq 1 80); do
+            response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-dividends" \
+              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
             echo "$response"
-            done=$(echo "$response" | jq -r '.done // false')
-            if [ "$done" = "true" ]; then
+            done_flag=$(echo "$response" | jq -r '.done // false' 2>/dev/null || echo "false")
+            if [ "$done_flag" = "true" ]; then
               echo "Daily dividends scan cycle completed."
               exit 0
             fi
-            sleep 3
+            sleep 5
           done
           echo "Daily dividends scan did not complete within the retry budget." >&2
           exit 1
