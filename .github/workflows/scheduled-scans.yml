@@ -43,6 +43,13 @@ jobs:
             response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-scan" \
               -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
             echo "$response"
+            # استجابة فارغة (فشل curl/انتهاء مهلة، مثلًا Render "يستيقظ" من الخمول)
+            # لا تعني أن الدورة انتهت - قد يكون الطلب ما زال يُعالَج فعليًا على
+            # الخادم رغم أن curl تخلّى عنه. لا نُنهي النجاح إلا على رد فعلي.
+            if [ -z "$response" ]; then
+              sleep 5
+              continue
+            fi
             active=$(echo "$response" | jq -r '.active // false' 2>/dev/null || echo "false")
             if [ "$active" != "true" ]; then
               exit 0
