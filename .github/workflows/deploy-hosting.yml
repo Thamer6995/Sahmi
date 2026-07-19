@@ -1,0 +1,64 @@
+name: Deploy Frontend to Firebase Hosting
+
+# نشر تلقائي للواجهة (frontend/) على Firebase Hosting - بديل عن تشغيل
+# `firebase deploy` يدويًا من جهاز محلي. يستخدم نفس مفتاح خدمة Firebase
+# (Service Account) المُستخدَم أصلًا على Render لصلاحيات Admin SDK -
+# يحتاج فقط نسخه كـ GitHub Secret إضافي بنفس الاسم:
+#
+#   Settings > Secrets and variables > Actions > New repository secret
+#   Name:  FIREBASE_SERVICE_ACCOUNT_BASE64
+#   Value: (نفس القيمة الموجودة أصلًا في متغيرات بيئة Render)
+#
+# قيم VITE_FIREBASE_* أدناه علنية غير حساسة (تُضمَّن دائمًا في حزمة JS
+# القابلة للعرض في أي متصفح بمجرد فتح الموقع) - لا خطر من وجودها هنا.
+
+on:
+  push:
+    branches:
+      - claude/sahmk-stock-analyzer-telegram-0yykdh
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-hosting.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDdX7gNc9UlIgFa6Ky2Hbtys4fmmoQVlVM
+          VITE_FIREBASE_AUTH_DOMAIN: sahmi-e3e49.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sahmi-e3e49
+          VITE_FIREBASE_STORAGE_BUCKET: sahmi-e3e49.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "936769357297"
+          VITE_FIREBASE_APP_ID: "1:936769357297:web:c735801e65ddbf295a3050"
+          VITE_DEV_MODE: "true"
+          VITE_BACKEND_URL: https://sahmi.onrender.com
+        run: npm run build
+
+      - name: Decode Firebase service account
+        id: decode_sa
+        run: |
+          echo "json<<EOF" >> "$GITHUB_OUTPUT"
+          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}" | base64 -d >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Firebase Hosting (live)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ steps.decode_sa.outputs.json }}
+          projectId: sahmi-e3e49
+          channelId: live
