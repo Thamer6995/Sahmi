@@ -9,6 +9,7 @@ import StockDetail from './pages/StockDetail';
 import Watchlist from './pages/Watchlist';
 import DividendCalendar from './pages/DividendCalendar';
 import Settings from './pages/Settings';
+import SystemDiagnostics from './pages/SystemDiagnostics';
 import DevTest from './pages/DevTest';
 
 const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
@@ -75,6 +76,16 @@ export default function App() {
               <ProtectedRoute>
                 <AppShell>
                   <Settings />
+                </AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/diagnostics"
+            element={
+              <ProtectedRoute>
+                <AppShell>
+                  <SystemDiagnostics />
                 </AppShell>
               </ProtectedRoute>
             }

@@ -14,6 +14,9 @@ export interface SendMessageResult {
   ok: boolean;
   messageId?: number;
   error?: string;
+  /** حقول تشخيصية إضافية (لا تُستخدم في منطق التنبيهات الحالي) - لصفحة System Diagnostics فقط. */
+  httpStatus?: number;
+  rawResponse?: unknown;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -56,6 +59,8 @@ export class TelegramService {
     }
 
     let lastError: string | undefined;
+    let lastStatus: number | undefined;
+    let lastRaw: unknown;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -72,10 +77,12 @@ export class TelegramService {
         };
 
         if (response.ok && json.ok) {
-          return { ok: true, messageId: json.result?.message_id };
+          return { ok: true, messageId: json.result?.message_id, httpStatus: response.status, rawResponse: json };
         }
 
         lastError = json.description ?? `HTTP ${response.status}`;
+        lastStatus = response.status;
+        lastRaw = json;
         const retryable = response.status === 429 || response.status >= 500;
         logger.warn('telegram_send_failed', { attempt, status: response.status, retryable, description: lastError });
 
@@ -90,7 +97,12 @@ export class TelegramService {
       }
     }
 
-    return { ok: false, error: lastError ?? 'فشل إرسال رسالة Telegram لسبب غير معروف' };
+    return {
+      ok: false,
+      error: lastError ?? 'فشل إرسال رسالة Telegram لسبب غير معروف',
+      httpStatus: lastStatus,
+      rawResponse: lastRaw,
+    };
   }
 
   async sendTestMessage(): Promise<SendMessageResult> {

@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/watchlist', label: 'قائمة المراقبة' },
   { to: '/dividends', label: 'تقويم التوزيعات' },
   { to: '/settings', label: 'الإعدادات' },
+  { to: '/diagnostics', label: 'System Diagnostics' },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

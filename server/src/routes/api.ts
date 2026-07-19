@@ -24,6 +24,7 @@ import { runAlertCheckForSymbol } from '../jobs/runAlertCheck';
 
 import { getRecentBars } from '../repo/historicalPricesRepo';
 import { sma50, sma200, rsi14, fiftyTwoWeekHigh, fiftyTwoWeekLow, fiftyTwoWeekLowClose, relativeDistancePercent } from '../technical';
+import { diagnosticsRouter } from './diagnostics';
 
 /**
  * كل مسارات الـ API (استبدال onCall functions السابقة على Firebase
@@ -33,6 +34,7 @@ import { sma50, sma200, rsi14, fiftyTwoWeekHigh, fiftyTwoWeekLow, fiftyTwoWeekLo
  */
 export const apiRouter = Router();
 apiRouter.use(requireAuth);
+apiRouter.use('/diagnostics', diagnosticsRouter);
 
 const MAX_SYMBOLS_PER_SCORE_CALL = 10;
 
