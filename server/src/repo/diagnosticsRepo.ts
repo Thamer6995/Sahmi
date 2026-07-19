@@ -36,7 +36,10 @@ export async function recordDiagnosticRun(testType: DiagnosticTestType, run: Dia
   const ref = db.collection('systemDiagnostics').doc(TEST_TYPE_DOC_ID[testType]);
   const snap = await ref.get();
   const existingRuns = (snap.data()?.runs as DiagnosticRun[] | undefined) ?? [];
-  const updatedRuns = [run, ...existingRuns].slice(0, MAX_RUNS_PER_TYPE);
+  // Firestore يرفض قيم undefined (على عكس omitUndefined العادية، `details` كائن
+  // متداخل قد يحتوي undefined في أي مستوى - JSON round-trip يزيلها جميعًا دفعة واحدة).
+  const cleanRun = JSON.parse(JSON.stringify(run)) as DiagnosticRun;
+  const updatedRuns = [cleanRun, ...existingRuns].slice(0, MAX_RUNS_PER_TYPE);
   await ref.set({ runs: updatedRuns, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
 

@@ -57,12 +57,11 @@ interface DiagnosticCardProps {
   buttonLabel: string;
   endpoint: string;
   onDone: (result: DiagnosticRunResult) => void;
-  running: boolean;
-  setRunning: (v: boolean) => void;
   lastResult?: DiagnosticRunResult;
 }
 
-function DiagnosticCard({ title, description, buttonLabel, endpoint, onDone, running, setRunning, lastResult }: DiagnosticCardProps) {
+function DiagnosticCard({ title, description, buttonLabel, endpoint, onDone, lastResult }: DiagnosticCardProps) {
+  const [running, setRunning] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
   async function run() {
@@ -105,7 +104,6 @@ function DiagnosticCard({ title, description, buttonLabel, endpoint, onDone, run
 }
 
 export default function SystemDiagnostics() {
-  const [running, setRunning] = useState(false);
   const [results, setResults] = useState<Record<string, DiagnosticRunResult>>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -145,8 +143,6 @@ export default function SystemDiagnostics() {
           description="يرسل رسالة اختبار حقيقية عبر نفس TelegramService المستخدم في النظام."
           buttonLabel="Send Test Message"
           endpoint="diagnostics/telegram"
-          running={running}
-          setRunning={setRunning}
           onDone={(r) => handleDone('telegram', r)}
           lastResult={results.telegram}
         />
@@ -155,8 +151,6 @@ export default function SystemDiagnostics() {
           description="طلب حقيقي واحد إلى SAHMK API (بيانات شركة 2222) - يقيس الوصول والزمن والحالة."
           buttonLabel="Test SAHMK Connection"
           endpoint="diagnostics/sahmk"
-          running={running}
-          setRunning={setRunning}
           onDone={(r) => handleDone('sahmk', r)}
           lastResult={results.sahmk}
         />
@@ -165,8 +159,6 @@ export default function SystemDiagnostics() {
           description="ينشئ مستندًا تجريبيًا، يقرأه، يحدّثه، ثم يحذفه - على Firestore الفعلي."
           buttonLabel="Test Firestore"
           endpoint="diagnostics/firestore"
-          running={running}
-          setRunning={setRunning}
           onDone={(r) => handleDone('firestore', r)}
           lastResult={results.firestore}
         />
@@ -175,8 +167,6 @@ export default function SystemDiagnostics() {
           description="يشغّل نفس خطوات الفحص المجدول يدويًا على عيّنة صغيرة من الرموز (لا يمس جدولة الإنتاج)."
           buttonLabel="Run Scan Now"
           endpoint="diagnostics/scheduler"
-          running={running}
-          setRunning={setRunning}
           onDone={(r) => handleDone('scheduler', r)}
           lastResult={results.scheduler}
         />
@@ -185,8 +175,6 @@ export default function SystemDiagnostics() {
           description="سهم وهمي بالكامل بالذاكرة (Score=95, Confidence=100, بدون تحذيرات) يمرّ عبر محرك التنبيهات الحقيقي ثم Telegram - بدون أي اعتماد على SAHMK أو بيانات سوق حقيقية."
           buttonLabel="Simulate Alert"
           endpoint="diagnostics/alert-simulation"
-          running={running}
-          setRunning={setRunning}
           onDone={(r) => handleDone('alertSimulation', r)}
           lastResult={results.alertSimulation}
         />
