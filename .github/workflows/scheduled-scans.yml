@@ -39,7 +39,7 @@ jobs:
       # دون انتظار (الجدولة نفسها ستستدعينا مرة أخرى خلال 30 دقيقة).
       - name: Trigger daily price + alert scan (loop only while active)
         run: |
-          for i in $(seq 1 80); do
+          for i in $(seq 1 600); do
             response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-scan" \
               -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
             echo "$response"
@@ -69,7 +69,7 @@ jobs:
       # (مؤكَّد فعليًا من سجلات Render). نكرر الاستدعاء هنا حتى ترجع done=true.
       - name: Trigger weekly financials scan (loop until complete)
         run: |
-          for i in $(seq 1 80); do
+          for i in $(seq 1 600); do
             response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/weekly-financials" \
               -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
             echo "$response"
@@ -91,7 +91,7 @@ jobs:
       # لنفس سبب weekly-financials-scan أعلاه - نكرر الاستدعاء حتى done=true.
       - name: Trigger daily dividends scan (loop until complete)
         run: |
-          for i in $(seq 1 80); do
+          for i in $(seq 1 600); do
             response=$(curl -sS --max-time 120 -X POST "${{ vars.RENDER_APP_URL }}/internal/daily-dividends" \
               -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}") || response=""
             echo "$response"
