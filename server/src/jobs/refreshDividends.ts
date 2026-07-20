@@ -19,15 +19,17 @@ function dedupeDividendEntries(entries: SahmkDividendEntry[]): SahmkDividendEntr
 }
 
 /** يحدّث سجل التوزيعات لكل رمز (جدولة يومية في المرحلة 8). */
-export async function refreshDividends(symbols?: string[]): Promise<BatchRunSummary> {
+export async function refreshDividends(symbols?: string[], signal?: AbortSignal): Promise<BatchRunSummary> {
   const targetSymbols = symbols && symbols.length > 0 ? symbols : await getAllCompanySymbols();
 
   return runBatched(
     'refreshDividends',
     targetSymbols,
     (symbol) => symbol,
-    async (symbol) => {
-      const raw = await sahmkService.getDividends(symbol);
+    async (symbol, itemSignal) => {
+      const raw = await sahmkService.getDividends(symbol, itemSignal);
+      if (itemSignal?.aborted) return; // لا نكتب Firestore بعد الإلغاء حتى لو نجح الطلب
+
       // مؤكَّد من raw response فعلي: الحقل الصحيح history/upcoming (وليس dividends/results)
       const entries = dedupeDividendEntries([...(raw.history ?? []), ...(raw.upcoming ?? []), ...(raw.dividends ?? []), ...(raw.results ?? [])]);
       const normalized = entries.map((entry) => normalizeDividendEntry(symbol, entry));
@@ -38,6 +40,7 @@ export async function refreshDividends(symbols?: string[]): Promise<BatchRunSumm
         await updateDividendYield(symbol, raw.trailing_12m_yield);
       }
     },
-    CONCURRENCY
+    CONCURRENCY,
+    signal
   );
 }

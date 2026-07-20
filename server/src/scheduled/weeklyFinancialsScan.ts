@@ -21,19 +21,25 @@ export interface WeeklyFinancialsScanResult {
  * ليعرف المستدعي (workflow الأسبوعي أو اختبار يدوي) هل يحتاج يستدعي مرة
  * أخرى لإكمال الدورة أم انتهت.
  */
-export async function runWeeklyFinancialsScan(): Promise<WeeklyFinancialsScanResult> {
+export async function runWeeklyFinancialsScan(signal?: AbortSignal): Promise<WeeklyFinancialsScanResult> {
   let progress = await getChunkProgress(JOB_KEY);
 
   if (!progress) {
     logger.info('weekly_financials_scan_cycle_started');
-    await refreshCompanies();
+    await refreshCompanies(signal);
+    if (signal?.aborted) return { done: false, processed: 0, total: 0, chunkFailed: 0 };
     const symbols = await getScanTargetSymbols();
     progress = { remaining: symbols, total: symbols.length };
   }
 
+  if (signal?.aborted) return { done: false, processed: progress.total - progress.remaining.length, total: progress.total, chunkFailed: 0 };
+
   const chunk = progress.remaining.slice(0, CHUNK_SIZE);
-  const summary = await refreshFinancialsAndRatios(chunk);
-  const remainingAfter = progress.remaining.slice(chunk.length);
+  const summary = await refreshFinancialsAndRatios(chunk, signal);
+  // العناصر اللي فعليًا اكتملت (نجاح أو فشل) فقط تُحذَف من remaining - لو أُلغيت
+  // المعالجة منتصف الدفعة، summary.cancelled يعكس ذلك وsucceeded+failed أقل من chunk.length
+  const actuallyProcessed = summary.succeeded + summary.failed;
+  const remainingAfter = progress.remaining.slice(actuallyProcessed);
   const processed = progress.total - remainingAfter.length;
 
   if (remainingAfter.length === 0) {

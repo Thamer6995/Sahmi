@@ -36,7 +36,8 @@ function formatRiyadhDatetime(): string {
 export async function evaluateAndMaybeSendAlert(
   result: InvestmentScoreResult,
   previousTotalScore: number | undefined,
-  previousDataCompleteness: number | undefined
+  previousDataCompleteness: number | undefined,
+  signal?: AbortSignal
 ): Promise<AlertEvaluation> {
   if (result.excluded || result.totalScore === undefined) {
     return { sent: false, tier: null, reason: 'الشركة مستبعدة من التقييم أو لا توجد درجة محسوبة' };
@@ -96,6 +97,12 @@ export async function evaluateAndMaybeSendAlert(
     return { sent: false, tier, reason: `تم إرسال نفس نوع التنبيه لهذا السهم خلال آخر ${cooldownDays} أيام` };
   }
 
+  // إلغاء تعاوني (من jobLock عبر المسار المجدول) - لا نبدأ إرسال Telegram
+  // ولا نكتب تنبيهًا جديدًا لسهم لم تبدأ معالجته بعد وقت الإلغاء.
+  if (signal?.aborted) {
+    return { sent: false, tier, reason: 'أُلغيت المعالجة (AbortSignal) قبل إرسال التنبيه' };
+  }
+
   const [company, quote] = await Promise.all([getCompany(result.symbol), getQuote(result.symbol)]);
 
   const { text, buttonUrl } = buildAlertMessage({
@@ -110,7 +117,12 @@ export async function evaluateAndMaybeSendAlert(
 
   const sendResult = await telegramService.sendMessage(text, {
     button: buttonUrl ? { text: 'فتح السهم في التطبيق', url: buttonUrl } : undefined,
+    signal,
   });
+
+  if (signal?.aborted) {
+    return { sent: false, tier, reason: 'أُلغيت المعالجة (AbortSignal) بعد محاولة الإرسال - لن يُسجَّل تنبيه جديد' };
+  }
 
   await createAlert({
     symbol: result.symbol,

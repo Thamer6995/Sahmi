@@ -27,6 +27,12 @@ interface RequestOptions {
   query?: Record<string, string | number | string[] | undefined>;
   /** لا تُعِد المحاولة تلقائيًا (تُستخدم لطلبات ذات كلفة خاصة إن لزم) */
   noRetry?: boolean;
+  /** إشارة إلغاء تعاوني (من jobLock.ts للمهام المجدولة) - تُنهي الطلب/إعادة المحاولة فورًا عند التفعيل. */
+  signal?: AbortSignal;
+}
+
+function abortError(path: string): SahmkApiError {
+  return new SahmkApiError('UNKNOWN', `أُلغي الطلب على ${path} (AbortSignal)`, path);
 }
 
 function buildUrl(baseUrl: string, path: string, query?: RequestOptions['query']): string {
@@ -69,6 +75,7 @@ function sleep(ms: number): Promise<void> {
  * - رفض الطلب مسبقًا إذا تجاوزنا السقف اليومي المحدد (5000).
  */
 export async function sahmkGet<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (options.signal?.aborted) throw abortError(path);
   await assertWithinDailyBudget();
 
   const baseUrl = SAHMK_BASE_URL();
@@ -82,8 +89,15 @@ export async function sahmkGet<T = unknown>(path: string, options: RequestOption
   let nextDelayMs: number | undefined;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // فحص الإلغاء قبل بدء أي محاولة جديدة - لا نبدأ طلب HTTP جديد بعد الإلغاء
+    if (options.signal?.aborted) throw abortError(path);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    // نربط إشارة الإلغاء التعاوني (إن وُجدت) بمتحكّم هذه المحاولة تحديدًا،
+    // حتى يتوقف الطلب الحالي فورًا بدل انتظار مهلة الـ15 ثانية كاملة.
+    const onExternalAbort = () => controller.abort();
+    options.signal?.addEventListener('abort', onExternalAbort);
 
     try {
       await recordApiRequest(path);
@@ -137,6 +151,12 @@ export async function sahmkGet<T = unknown>(path: string, options: RequestOption
       lastError = err;
     } catch (error) {
       clearTimeout(timeout);
+      if (options.signal?.aborted) {
+        // الإلغاء جاء من الإشارة التعاونية الخارجية (jobLock) لا من مهلتنا الداخلية -
+        // نرمي فورًا بدون أي إعادة محاولة إطلاقًا.
+        logger.warn('sahmk_request_aborted', { path, attempt });
+        throw abortError(path);
+      }
       if (error instanceof SahmkApiError) {
         if (attempt === maxAttempts - 1) throw error;
         lastError = error;
@@ -155,7 +175,12 @@ export async function sahmkGet<T = unknown>(path: string, options: RequestOption
         if (attempt === maxAttempts - 1) throw unknownErr;
         lastError = unknownErr;
       }
+    } finally {
+      options.signal?.removeEventListener('abort', onExternalAbort);
     }
+
+    // لا تنتظر (backoff) إذا طُلِب الإلغاء أثناء الانتظار بين المحاولات
+    if (options.signal?.aborted) throw abortError(path);
 
     const delay = nextDelayMs ?? BACKOFF_FACTOR_MS * Math.pow(2, attempt);
     nextDelayMs = undefined;

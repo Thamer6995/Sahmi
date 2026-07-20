@@ -45,7 +45,7 @@ function riyadhNow(): { date: string; time: string } {
  * أحيانًا بصمت قبل اكتماله). مرحلة التقييم والتنبيهات (Firestore فقط، بلا
  * طلبات SAHMK) سريعة بما يكفي لتبقى دفعة واحدة.
  */
-export async function runDailyPriceAndAlertScan(): Promise<DailyScanResult> {
+export async function runDailyPriceAndAlertScan(signal?: AbortSignal): Promise<DailyScanResult> {
   const { date, time } = riyadhNow();
 
   if (await hasRunToday(JOB_KEY, date)) {
@@ -65,17 +65,19 @@ export async function runDailyPriceAndAlertScan(): Promise<DailyScanResult> {
 
     logger.info('daily_scan_started', { date, time, scheduledFor: settings.scanSchedule });
     const symbols = await getScanTargetSymbols();
-    await refreshQuotes(symbols); // Bulk - سريع، لا يحتاج تقسيم
+    await refreshQuotes(symbols, signal); // Bulk - سريع، لا يحتاج تقسيم
     state = { date, phase: 'historical', historicalRemaining: symbols, allSymbols: symbols, total: symbols.length };
   }
+
+  if (signal?.aborted) return { ranToday: false, done: false, active: true, total: state.total };
 
   if (state.phase === 'historical') {
     const remaining = state.historicalRemaining;
     const chunk = remaining.slice(0, HISTORICAL_CHUNK_SIZE);
-    await refreshHistorical(chunk);
+    await refreshHistorical(chunk, signal);
     const remainingAfter = remaining.slice(chunk.length);
 
-    if (remainingAfter.length > 0) {
+    if (remainingAfter.length > 0 || signal?.aborted) {
       const nextState = { ...state, historicalRemaining: remainingAfter };
       await saveDailyScanState(nextState);
       return {
@@ -89,8 +91,17 @@ export async function runDailyPriceAndAlertScan(): Promise<DailyScanResult> {
     state = { ...state, phase: 'alerts', historicalRemaining: [] };
   }
 
+  if (signal?.aborted) return { ranToday: false, done: false, active: true, total: state.total };
+
   // state.phase === 'alerts': تقييم + تنبيهات لكل السوق دفعة واحدة (Firestore فقط، بلا طلبات SAHMK)
-  const alertsSummary = await scanAndAlertAllSymbols(state.allSymbols);
+  const alertsSummary = await scanAndAlertAllSymbols(state.allSymbols, signal);
+
+  if (signal?.aborted) {
+    // لا نعلّم اليوم كمكتمل ولا نمسح حالة التقدّم إذا أُلغي أثناء مرحلة التنبيهات -
+    // التشغيلة التالية تعيد محاولة التنبيهات لأي رمز لم تتم معالجته فعليًا.
+    return { ranToday: false, done: false, active: true, total: state.total };
+  }
+
   await markRunToday(JOB_KEY, date);
   await clearDailyScanState();
 

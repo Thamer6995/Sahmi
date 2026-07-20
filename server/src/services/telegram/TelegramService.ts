@@ -32,8 +32,14 @@ export class TelegramService {
   /** يرسل رسالة نصية (Markdown أو HTML) مع زر اختياري، ويعيد محاولة الإرسال عند فشل مؤقت. */
   async sendMessage(
     text: string,
-    options: { parseMode?: 'MarkdownV2' | 'HTML'; button?: InlineButton } = {}
+    options: { parseMode?: 'MarkdownV2' | 'HTML'; button?: InlineButton; signal?: AbortSignal } = {}
   ): Promise<SendMessageResult> {
+    // إلغاء تعاوني (من jobLock عبر المسار المجدول فقط - راجع evaluateAlert.ts) -
+    // لا نبدأ إرسالًا جديدًا إذا كانت المهمة المستدعية قد أُلغيت فعليًا.
+    if (options.signal?.aborted) {
+      return { ok: false, error: 'أُلغي الإرسال (AbortSignal) قبل البدء.' };
+    }
+
     let token: string;
     let chatId: string;
     try {
@@ -63,11 +69,15 @@ export class TelegramService {
     let lastRaw: unknown;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (options.signal?.aborted) {
+        return { ok: false, error: 'أُلغي الإرسال (AbortSignal) أثناء إعادة المحاولة.' };
+      }
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal: options.signal,
         });
 
         const json = (await response.json().catch(() => ({}))) as {

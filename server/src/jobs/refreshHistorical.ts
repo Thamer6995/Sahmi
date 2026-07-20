@@ -18,7 +18,7 @@ function formatDate(d: Date): string {
  * 250 جلسة فقط، تمامًا كما هو مطلوب. في التحديثات اللاحقة يجلب فقط الأيام
  * الجديدة بعد آخر تاريخ مخزَّن بدل إعادة تحميل التاريخ كاملًا.
  */
-export async function refreshHistorical(symbols?: string[]): Promise<BatchRunSummary> {
+export async function refreshHistorical(symbols?: string[], signal?: AbortSignal): Promise<BatchRunSummary> {
   const targetSymbols = symbols && symbols.length > 0 ? symbols : await getAllCompanySymbols();
   const today = formatDate(new Date());
 
@@ -26,7 +26,7 @@ export async function refreshHistorical(symbols?: string[]): Promise<BatchRunSum
     'refreshHistorical',
     targetSymbols,
     (symbol) => symbol,
-    async (symbol) => {
+    async (symbol, itemSignal) => {
       const latestDate = await getLatestStoredDate(symbol);
       const isInitialLoad = !latestDate;
 
@@ -42,7 +42,7 @@ export async function refreshHistorical(symbols?: string[]): Promise<BatchRunSum
         from = formatDate(lookback);
       }
 
-      const raw = await sahmkService.getHistorical(symbol, { interval: '1d', from, to: today });
+      const raw = await sahmkService.getHistorical(symbol, { interval: '1d', from, to: today }, itemSignal);
       const rawBars = raw.bars ?? raw.results ?? raw.data ?? [];
       let bars = rawBars.map(normalizeOhlcvBar).filter((b): b is NonNullable<typeof b> => b !== null);
 
@@ -52,8 +52,11 @@ export async function refreshHistorical(symbols?: string[]): Promise<BatchRunSum
         bars = bars.slice(bars.length - INITIAL_SESSIONS_TO_KEEP);
       }
 
+      if (itemSignal?.aborted) return; // لا نكتب Firestore بعد الإلغاء حتى لو نجح طلب SAHMK قبل الإلغاء مباشرة
+
       await upsertHistoricalBars(symbol, bars);
     },
-    CONCURRENCY
+    CONCURRENCY,
+    signal
   );
 }

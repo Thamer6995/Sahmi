@@ -7,6 +7,8 @@ export interface BatchRunSummary {
   succeeded: number;
   failed: number;
   errors: { item: string; message: string }[];
+  /** true إذا توقّف التشغيل قبل معالجة كل العناصر بسبب إلغاء تعاوني (AbortSignal). */
+  cancelled: boolean;
 }
 
 /**
@@ -14,19 +16,25 @@ export interface BatchRunSummary {
  * واحد لا يوقف بقية المعالجة أبدًا (متطلب صريح: "لا تجعل فشل سهم واحد
  * يوقف تحليل جميع السوق"). يسجّل تقدم كل دفعة في Firestore
  * (collection: syncJobs) حتى يمكن متابعته من لوحة الإدارة لاحقًا.
+ *
+ * يفحص `signal` (إن وُجدت) قبل بدء أي دفعة جديدة - لا يبدأ أي طلب SAHMK أو
+ * كتابة Firestore لعناصر لم تبدأ معالجتها بعد إذا طُلِب الإلغاء. العناصر
+ * التي بدأت فعليًا ضمن الدفعة الجارية وقت الإلغاء تُترَك لتكتمل طبيعيًا
+ * (Promise.allSettled على الدفعة الحالية) - هذا مقبول ومقصود.
  */
 export async function runBatched<T>(
   jobName: string,
   items: T[],
   keyOf: (item: T) => string,
-  handler: (item: T) => Promise<void>,
-  batchSize = 25
+  handler: (item: T, signal?: AbortSignal) => Promise<void>,
+  batchSize = 25,
+  signal?: AbortSignal
 ): Promise<BatchRunSummary> {
   const db = getFirestore();
   const jobRef = db.collection('syncJobs').doc();
   const jobId = jobRef.id;
 
-  const summary: BatchRunSummary = { jobId, total: items.length, succeeded: 0, failed: 0, errors: [] };
+  const summary: BatchRunSummary = { jobId, total: items.length, succeeded: 0, failed: 0, errors: [], cancelled: false };
 
   await jobRef.set({
     jobName,
@@ -44,7 +52,17 @@ export async function runBatched<T>(
   }
 
   for (const batch of batches) {
-    const results = await Promise.allSettled(batch.map((item) => handler(item)));
+    if (signal?.aborted) {
+      summary.cancelled = true;
+      logger.warn('batch_run_cancelled', {
+        jobName,
+        processed: summary.succeeded + summary.failed,
+        remaining: items.length - (summary.succeeded + summary.failed),
+      });
+      break;
+    }
+
+    const results = await Promise.allSettled(batch.map((item) => handler(item, signal)));
 
     results.forEach((result, idx) => {
       const item = batch[idx];
@@ -67,7 +85,7 @@ export async function runBatched<T>(
   }
 
   await jobRef.update({
-    status: 'completed',
+    status: summary.cancelled ? 'cancelled' : 'completed',
     finishedAt: FieldValue.serverTimestamp(),
     errors: summary.errors.slice(0, 100), // نحتفظ بعينة فقط لتفادي تضخم الوثيقة
   });
@@ -77,6 +95,7 @@ export async function runBatched<T>(
     total: summary.total,
     succeeded: summary.succeeded,
     failed: summary.failed,
+    cancelled: summary.cancelled,
   });
 
   return summary;

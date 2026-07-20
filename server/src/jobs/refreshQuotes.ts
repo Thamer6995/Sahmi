@@ -14,7 +14,7 @@ const CONCURRENT_BULK_REQUESTS = 5;
  * الرموز إلى دفعات من 50 (حد الباقة)، ويحفظ نتيجة كل دفعة فور وصولها
  * حتى لو فشلت دفعة أخرى لاحقًا (لا يوقف فشل سهم/دفعة واحدة بقية التحديث).
  */
-export async function refreshQuotes(symbols?: string[]): Promise<BatchRunSummary> {
+export async function refreshQuotes(symbols?: string[], signal?: AbortSignal): Promise<BatchRunSummary> {
   const targetSymbols = symbols && symbols.length > 0 ? symbols : await getAllCompanySymbols();
 
   if (targetSymbols.length === 0) {
@@ -27,13 +27,14 @@ export async function refreshQuotes(symbols?: string[]): Promise<BatchRunSummary
     'refreshQuotes',
     symbolBatches,
     (batch) => `${batch[0] ?? '?'}..${batch[batch.length - 1] ?? '?'} (${batch.length})`,
-    async (batch) => {
-      const rawQuotes = await sahmkService.getBulkQuotes(batch);
+    async (batch, itemSignal) => {
+      const rawQuotes = await sahmkService.getBulkQuotes(batch, itemSignal);
       const normalized = rawQuotes
         .map(normalizeQuote)
         .filter((q): q is NonNullable<typeof q> => q !== null);
       await upsertQuotes(normalized);
     },
-    CONCURRENT_BULK_REQUESTS
+    CONCURRENT_BULK_REQUESTS,
+    signal
   );
 }

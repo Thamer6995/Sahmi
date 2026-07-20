@@ -9,14 +9,16 @@ import { InvestmentScoreResult } from '../scoring/investmentScore';
  * الدالة من كل من الفحص المجدول (المرحلة 8) واختبار المطوّر (DevTest).
  */
 export async function runAlertCheckForSymbol(
-  symbol: string
+  symbol: string,
+  signal?: AbortSignal
 ): Promise<{ result: InvestmentScoreResult; evaluation: AlertEvaluation }> {
   const previousScore = await getScore(symbol);
   const result = await computeScoreForSymbol(symbol);
   const evaluation = await evaluateAndMaybeSendAlert(
     result,
     previousScore?.totalScore,
-    previousScore?.dataCompleteness
+    previousScore?.dataCompleteness,
+    signal
   );
   return { result, evaluation };
 }

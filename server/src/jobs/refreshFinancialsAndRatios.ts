@@ -17,26 +17,29 @@ const CONCURRENCY = 3;
  * إن كانت /analytics/ratios/ غير متاحة مؤقتًا لكن /financials/ نجحت).
  * فشل الاثنين معًا لسهم واحد يُسجَّل كفشل لهذا السهم فقط دون إيقاف الباقي.
  */
-export async function refreshFinancialsAndRatios(symbols?: string[]): Promise<BatchRunSummary> {
+export async function refreshFinancialsAndRatios(symbols?: string[], signal?: AbortSignal): Promise<BatchRunSummary> {
   const targetSymbols = symbols && symbols.length > 0 ? symbols : await getAllCompanySymbols();
 
   return runBatched(
     'refreshFinancialsAndRatios',
     targetSymbols,
     (symbol) => symbol,
-    async (symbol) => {
+    async (symbol, itemSignal) => {
       const partialErrors: string[] = [];
 
       try {
-        const financialsRaw = await sahmkService.getFinancials(symbol);
+        const financialsRaw = await sahmkService.getFinancials(symbol, {}, itemSignal);
+        if (itemSignal?.aborted) return;
         const periods = normalizeFinancials(symbol, financialsRaw);
         await upsertFinancials(periods);
       } catch (err) {
         partialErrors.push(`financials: ${(err as Error).message}`);
       }
 
+      if (itemSignal?.aborted) return; // لا نبدأ طلب ratios جديدًا بعد الإلغاء
+
       try {
-        const ratiosRaw = await sahmkService.getRatios(symbol);
+        const ratiosRaw = await sahmkService.getRatios(symbol, itemSignal);
         const ratios = normalizeRatios(symbol, ratiosRaw);
 
         // P/E وP/B غير متوفرين في /analytics/ratios/ إطلاقًا (مؤكَّد من raw
@@ -47,14 +50,14 @@ export async function refreshFinancialsAndRatios(symbols?: string[]): Promise<Ba
         // إطلاقًا (مؤكَّد من raw response فعلي) - وبدون قطاع صحيح لا يمكن
         // استبعاد الشركات المالية (بنوك/تأمين) من التقييم كما يتطلب التصميم.
         try {
-          const companyRaw = await sahmkService.getCompany(symbol);
+          const companyRaw = await sahmkService.getCompany(symbol, itemSignal);
           const { pe, pb, eps } = extractCompanyFundamentals(companyRaw);
           ratios.pe = ratios.pe ?? pe;
           ratios.pb = ratios.pb ?? pb;
           if (eps !== undefined) ratios.rawMetrics.eps = eps;
 
           const company = normalizeCompany(companyRaw);
-          if (company) {
+          if (company && !itemSignal?.aborted) {
             await updateCompanySector(symbol, {
               sector: company.sector,
               industry: company.industry,
@@ -64,6 +67,8 @@ export async function refreshFinancialsAndRatios(symbols?: string[]): Promise<Ba
         } catch (err) {
           logger.warn('refresh_ratios_company_fundamentals_failed', { symbol, message: (err as Error).message });
         }
+
+        if (itemSignal?.aborted) return; // لا نكتب النسب بعد الإلغاء
 
         await upsertRatios(ratios);
       } catch (err) {
@@ -77,6 +82,7 @@ export async function refreshFinancialsAndRatios(symbols?: string[]): Promise<Ba
         logger.warn('refresh_financials_partial_failure', { symbol, error: partialErrors[0] });
       }
     },
-    CONCURRENCY
+    CONCURRENCY,
+    signal
   );
 }

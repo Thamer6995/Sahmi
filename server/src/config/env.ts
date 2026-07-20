@@ -49,3 +49,13 @@ export const PORT = Number(process.env.PORT ?? 8080);
  * لساعة كاملة كما حدث فعليًا يوم 19 يوليو 2026 قبل هذا الإصلاح.
  */
 export const JOB_LOCK_TIMEOUT_MS = () => Number(optional('JOB_LOCK_TIMEOUT_MS', '480000'));
+
+/**
+ * بعد انتهاء JOB_LOCK_TIMEOUT_MS، يُرسَل طلب إلغاء تعاوني (AbortSignal) للمهمة
+ * المعلَّقة، ثم تُمنَح هذه المهلة الإضافية (15 ثانية افتراضيًا) لتتوقف فعليًا
+ * (تتوقف عن أي طلب SAHMK جديد وأي كتابة Firestore جديدة) قبل أن يُقرَّر إن
+ * كانت استجابت للإلغاء أو تجاهلته. 15 ثانية كافية لإنهاء أي طلب HTTP مفرد قيد
+ * التنفيذ فعليًا (مهلة الطلب الواحد لـ SAHMK هي 15 ثانية أصلًا) بعد أن يتوقف
+ * السحب عن بدء طلبات جديدة.
+ */
+export const JOB_LOCK_ABORT_GRACE_MS = () => Number(optional('JOB_LOCK_ABORT_GRACE_MS', '15000'));

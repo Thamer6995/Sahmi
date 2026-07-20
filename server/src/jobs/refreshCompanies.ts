@@ -14,8 +14,13 @@ export interface RefreshCompaniesResult {
  * يُستدعى يدويًا الآن (زر تحديث)، وسيُربط بجدولة أسبوعية في المرحلة 8
  * (دليل الشركات نادرًا ما يتغير خلافًا للأسعار).
  */
-export async function refreshCompanies(): Promise<RefreshCompaniesResult> {
-  const rawCompanies = await sahmkService.getAllCompanies();
+export async function refreshCompanies(signal?: AbortSignal): Promise<RefreshCompaniesResult> {
+  const rawCompanies = await sahmkService.getAllCompanies(100, signal);
+
+  if (signal?.aborted) {
+    logger.warn('refresh_companies_aborted');
+    return { fetched: rawCompanies.length, upserted: 0, skipped: 0 };
+  }
 
   const normalized = rawCompanies.map(normalizeCompany);
   const valid = normalized.filter((c): c is NonNullable<typeof c> => c !== null);
