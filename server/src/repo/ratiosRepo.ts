@@ -38,8 +38,13 @@ export async function getRatios(symbol: string): Promise<NormalizedRatios | unde
  */
 export async function updateDividendYield(symbol: string, dividendYield: number): Promise<void> {
   const db = getFirestore();
-  await db
-    .collection('ratios')
-    .doc(symbol)
-    .set({ symbol, dividendYield, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const ref = db.collection('ratios').doc(symbol);
+  const existing = await ref.get();
+  // تخطَّ الكتابة إن كانت القيمة نفسها فعليًا (تُستدعى يوميًا لكل شركة - القيمة
+  // نادرًا ما تتغيّر بين يوم وآخر، وإعادة الكتابة بلا تغيير حقيقي كانت أحد
+  // أسباب استنزاف حصة الكتابة اليومية المجانية لـ Firestore.
+  if (existing.exists && existing.data()?.dividendYield === dividendYield) {
+    return;
+  }
+  await ref.set({ symbol, dividendYield, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
