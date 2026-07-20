@@ -42,6 +42,13 @@ export async function runWeeklyFinancialsScan(signal?: AbortSignal): Promise<Wee
   const remainingAfter = progress.remaining.slice(actuallyProcessed);
   const processed = progress.total - remainingAfter.length;
 
+  logger.info('weekly_financials_scan_chunk_stats', {
+    fetched: summary.stats.fetched,
+    changed: summary.stats.changed,
+    skipped: summary.stats.skipped,
+    failed: summary.stats.failed,
+  });
+
   if (remainingAfter.length === 0) {
     await clearChunkProgress(JOB_KEY);
     logger.info('weekly_financials_scan_cycle_completed', { total: progress.total });

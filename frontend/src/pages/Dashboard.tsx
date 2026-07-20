@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, doc, onSnapshot, orderBy, query, limit as fbLimit } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, limit as fbLimit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { backendCallable } from '../lib/backend';
 import { useCollection } from '../hooks/useCollection';
@@ -14,15 +14,10 @@ const ALERT_LABELS: Record<Alert['alertType'], string> = {
   '90-100': 'فرصة قوية',
 };
 
-function todayRiyadhDocId(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date());
-}
-
 export default function Dashboard() {
   const { data: companies } = useCollection<Company>('companies');
   const { data: scores } = useCollection<Score>('scores');
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [apiUsage, setApiUsage] = useState<{ requestCount?: number; updatedAt?: { seconds: number } } | null>(null);
   const [telegramStatus, setTelegramStatus] = useState<'idle' | 'checking' | 'ok' | 'fail'>('idle');
 
   useEffect(() => {
@@ -30,11 +25,6 @@ export default function Dashboard() {
     return onSnapshot(q, (snap) => {
       setAlerts(snap.docs.map((d) => ({ ...(d.data() as Omit<Alert, 'id'>), id: d.id })));
     });
-  }, []);
-
-  useEffect(() => {
-    const ref = doc(db, 'apiUsage', todayRiyadhDocId());
-    return onSnapshot(ref, (snap) => setApiUsage(snap.exists() ? (snap.data() as typeof apiUsage) : null));
   }, []);
 
   async function testTelegram() {
@@ -53,27 +43,13 @@ export default function Dashboard() {
   const above80 = analyzedScores.filter((s) => (s.totalScore ?? 0) >= 80);
   const top10 = [...analyzedScores].sort((a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0)).slice(0, 10);
 
-  const usageCount = apiUsage?.requestCount ?? 0;
-  const usageUpdatedAt = apiUsage?.updatedAt ? new Date(apiUsage.updatedAt.seconds * 1000) : undefined;
-
   return (
     <div className="mx-auto max-w-6xl">
       <h1 className="mb-6 text-xl font-bold text-slate-900">لوحة التحكم</h1>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4">
         <StatCard label="الأسهم المحللة" value={analyzedScores.length} />
         <StatCard label="أسهم فوق 80" value={above80.length} tone="good" />
-        <StatCard
-          label="استهلاك API اليوم"
-          value={`${usageCount} / 5000`}
-          hint={usageUpdatedAt ? `آخر تحديث ${usageUpdatedAt.toLocaleTimeString('ar-SA')}` : 'لا استخدام بعد اليوم'}
-          tone={usageCount > 4000 ? 'warning' : 'default'}
-        />
-        <StatCard
-          label="حالة اتصال SAHMK"
-          value={usageCount > 0 ? 'نشط اليوم' : 'لم يُستخدم اليوم'}
-          tone={usageCount > 0 ? 'good' : 'default'}
-        />
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">

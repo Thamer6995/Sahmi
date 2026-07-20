@@ -21,3 +21,28 @@ export function chunk<T>(items: T[], size: number): T[][] {
   }
   return chunks;
 }
+
+/** يعيد نسخة من القيمة بمفاتيح الكائنات (بما فيها المتداخلة) مرتّبة أبجديًا،
+ *  حتى تكون المقارنة عبر JSON.stringify مستقرة بغض النظر عن ترتيب الإدراج. */
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      out[key] = canonicalize((value as Record<string, unknown>)[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * مقارنة تساوي مستقرة لا تتأثر بترتيب خصائص الكائن (بخلاف `JSON.stringify`
+ * المباشر، الذي يعتمد على ترتيب الإدراج). تُستخدم لتحديد هل بيانات SAHMK
+ * الخام (rawMetrics وشبهها) تغيّرت فعليًا قبل الكتابة على Firestore، بدل
+ * الاعتماد على وجود الحقل فقط أو على updatedAt (الذي يتغيّر دائمًا حتى لو
+ * كانت القيم نفسها).
+ */
+export function stableEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(canonicalize(a)) === JSON.stringify(canonicalize(b));
+}

@@ -1,21 +1,57 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { omitUndefined } from '../utils/firestoreHelpers';
+import { omitUndefined, stableEqual } from '../utils/firestoreHelpers';
 import { NormalizedFinancialPeriod } from '../services/sahmk/mappers';
 
 function safeDocId(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
-export async function upsertFinancials(periods: NormalizedFinancialPeriod[]): Promise<void> {
-  if (periods.length === 0) return;
-  const db = getFirestore();
-  const batch = db.batch();
+/** الحقول الفعلية للمقارنة عند تحديد إن كانت الفترة المالية تغيّرت فعليًا
+ *  (باستثناء updatedAt). rawMetrics تُقارَن بمقارنة مستقرة (stableEqual) لا
+ *  تتأثر بترتيب المفاتيح، لأنها كائن خام مصدره استجابة SAHMK مباشرة. */
+function financialContentEquals(a: NormalizedFinancialPeriod, b: Record<string, unknown>): boolean {
+  return (
+    a.revenue === b.revenue &&
+    a.netIncome === b.netIncome &&
+    a.operatingCashFlow === b.operatingCashFlow &&
+    a.totalAssets === b.totalAssets &&
+    a.totalLiabilities === b.totalLiabilities &&
+    a.totalEquity === b.totalEquity &&
+    a.totalDebt === b.totalDebt &&
+    stableEqual(a.rawMetrics, b.rawMetrics)
+  );
+}
 
-  for (const p of periods) {
-    const docId = `${p.symbol}_${p.periodType}_${safeDocId(p.period)}`;
-    const ref = db.collection('financials').doc(docId);
+export interface UpsertFinancialsResult {
+  changed: number;
+  skipped: number;
+}
+
+/**
+ * تكتب فقط الفترات المالية الجديدة أو المتغيّرة فعليًا - القوائم المالية
+ * المنشورة تاريخيًا لا تتغيّر أبدًا عمليًا، فإعادة كتابتها أسبوعيًا لكل
+ * الفترات لكل الشركات كانت أحد مصادر استنزاف حصة الكتابة اليومية المجانية.
+ */
+export async function upsertFinancials(periods: NormalizedFinancialPeriod[]): Promise<UpsertFinancialsResult> {
+  if (periods.length === 0) return { changed: 0, skipped: 0 };
+  const db = getFirestore();
+
+  const refs = periods.map((p) => db.collection('financials').doc(`${p.symbol}_${p.periodType}_${safeDocId(p.period)}`));
+  const existingSnaps = await db.getAll(...refs);
+
+  const batch = db.batch();
+  let changed = 0;
+  let skipped = 0;
+
+  periods.forEach((p, i) => {
+    const existing = existingSnaps[i];
+    if (existing.exists && financialContentEquals(p, existing.data() ?? {})) {
+      skipped += 1;
+      return; // لا تغيير فعلي - تخطَّ الكتابة تمامًا
+    }
+    changed += 1;
     batch.set(
-      ref,
+      refs[i],
       omitUndefined({
         symbol: p.symbol,
         period: p.period,
@@ -32,9 +68,13 @@ export async function upsertFinancials(periods: NormalizedFinancialPeriod[]): Pr
       }),
       { merge: true }
     );
+  });
+
+  if (changed > 0) {
+    await batch.commit();
   }
 
-  await batch.commit();
+  return { changed, skipped };
 }
 
 /** الفترات السنوية لسهم، مرتّبة تصاعديًا حسب الفترة (الأقدم أولًا). */

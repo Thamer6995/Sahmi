@@ -11,27 +11,54 @@ import { logger } from '../utils/logger';
 // متكرر (429) أثناء تحديث شامل لكامل السوق (مؤكَّد من سجلات Render فعلية).
 const CONCURRENCY = 3;
 
+export interface RefreshFinancialsAndRatiosResult extends BatchRunSummary {
+  /** إحصاءات على مستوى القراءة/الكتابة الفعلية، بالإضافة لعدّادات
+   *  succeeded/failed الموروثة من BatchRunSummary (على مستوى الرمز). */
+  stats: {
+    /** عدد الرموز التي نجح جلب financials و/أو ratios لها فعليًا من SAHMK. */
+    fetched: number;
+    /** عدد عمليات الكتابة الفعلية على Firestore (فترات مالية + مستندات نسب). */
+    changed: number;
+    /** عدد عمليات الكتابة المتخطّاة لأن البيانات لم تتغيّر فعليًا. */
+    skipped: number;
+    /** عدد الرموز التي فشل جلب financials وratios كليهما لها (= summary.failed). */
+    failed: number;
+  };
+}
+
 /**
  * يحدّث القوائم المالية والنسب لكل رمز على حدة. الاثنان (financials و
  * ratios) يُجلبان بشكل مستقل لكل سهم: فشل أحدهما لا يمنع حفظ الآخر (مثلاً
  * إن كانت /analytics/ratios/ غير متاحة مؤقتًا لكن /financials/ نجحت).
  * فشل الاثنين معًا لسهم واحد يُسجَّل كفشل لهذا السهم فقط دون إيقاف الباقي.
+ *
+ * الكتابة الفعلية على Firestore (upsertFinancials/upsertRatios) تتخطى أي
+ * فترة/مستند لم تتغيّر بياناته فعليًا مقارنةً بالمخزَّن - راجع
+ * financialsRepo.ts وratiosRepo.ts. هذه الدالة تجمع إحصاءات fetched/changed/
+ * skipped عبر كل الرموز في هذه الدفعة ليستطيع المستدعي (weeklyFinancialsScan)
+ * تسجيلها.
  */
-export async function refreshFinancialsAndRatios(symbols?: string[], signal?: AbortSignal): Promise<BatchRunSummary> {
+export async function refreshFinancialsAndRatios(symbols?: string[], signal?: AbortSignal): Promise<RefreshFinancialsAndRatiosResult> {
   const targetSymbols = symbols && symbols.length > 0 ? symbols : await getAllCompanySymbols();
 
-  return runBatched(
+  const stats = { fetched: 0, changed: 0, skipped: 0 };
+
+  const summary = await runBatched(
     'refreshFinancialsAndRatios',
     targetSymbols,
     (symbol) => symbol,
     async (symbol, itemSignal) => {
       const partialErrors: string[] = [];
+      let fetchedSomething = false;
 
       try {
         const financialsRaw = await sahmkService.getFinancials(symbol, {}, itemSignal);
         if (itemSignal?.aborted) return;
         const periods = normalizeFinancials(symbol, financialsRaw);
-        await upsertFinancials(periods);
+        fetchedSomething = true;
+        const result = await upsertFinancials(periods);
+        stats.changed += result.changed;
+        stats.skipped += result.skipped;
       } catch (err) {
         partialErrors.push(`financials: ${(err as Error).message}`);
       }
@@ -41,6 +68,7 @@ export async function refreshFinancialsAndRatios(symbols?: string[], signal?: Ab
       try {
         const ratiosRaw = await sahmkService.getRatios(symbol, itemSignal);
         const ratios = normalizeRatios(symbol, ratiosRaw);
+        fetchedSomething = true;
 
         // P/E وP/B غير متوفرين في /analytics/ratios/ إطلاقًا (مؤكَّد من raw
         // response فعلي) - مصدرهما fundamentals ضمن /company/{symbol}/.
@@ -70,9 +98,18 @@ export async function refreshFinancialsAndRatios(symbols?: string[], signal?: Ab
 
         if (itemSignal?.aborted) return; // لا نكتب النسب بعد الإلغاء
 
-        await upsertRatios(ratios);
+        const ratiosResult = await upsertRatios(ratios);
+        if (ratiosResult.changed) {
+          stats.changed += 1;
+        } else {
+          stats.skipped += 1;
+        }
       } catch (err) {
         partialErrors.push(`ratios: ${(err as Error).message}`);
+      }
+
+      if (fetchedSomething) {
+        stats.fetched += 1;
       }
 
       if (partialErrors.length === 2) {
@@ -85,4 +122,6 @@ export async function refreshFinancialsAndRatios(symbols?: string[], signal?: Ab
     CONCURRENCY,
     signal
   );
+
+  return { ...summary, stats: { ...stats, failed: summary.failed } };
 }

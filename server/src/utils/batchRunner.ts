@@ -1,4 +1,4 @@
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { randomUUID } from 'node:crypto';
 import { logger } from './logger';
 
 export interface BatchRunSummary {
@@ -14,8 +14,16 @@ export interface BatchRunSummary {
 /**
  * ينفّذ معالجة لكل عنصر من قائمة (مثلًا رموز أسهم) بشكل منعزل: فشل عنصر
  * واحد لا يوقف بقية المعالجة أبدًا (متطلب صريح: "لا تجعل فشل سهم واحد
- * يوقف تحليل جميع السوق"). يسجّل تقدم كل دفعة في Firestore
- * (collection: syncJobs) حتى يمكن متابعته من لوحة الإدارة لاحقًا.
+ * يوقف تحليل جميع السوق").
+ *
+ * ملاحظة (Storage Refactor Phase 1): كان تقدّم كل دفعة يُسجَّل سابقًا في
+ * Firestore (collection: syncJobs، مستند جديد لكل استدعاء). تأكَّد أنه لا
+ * يوجد أي مستهلك فعلي لهذه المجموعة في كامل المشروع (لا لوحة إدارة تقرأها،
+ * لا مسار API يعرضها) - كانت فقط تتراكم بلا سقف، مستند جديد مع كل تشغيلة
+ * مجدولة، للأبد. أُزيلت الكتابة كليًا بدل تحديد سقف (20 تشغيلة مثلًا) لأن
+ * تحديد سقف لبيانات لا يقرأها أحد لا يحل شيئًا - فقط يبطئ التراكم. jobId
+ * يبقى معرّفًا محليًا (UUID) لغرض الربط في السجلات (logs) فقط، دون أي علاقة
+ * بـ Firestore.
  *
  * يفحص `signal` (إن وُجدت) قبل بدء أي دفعة جديدة - لا يبدأ أي طلب SAHMK أو
  * كتابة Firestore لعناصر لم تبدأ معالجتها بعد إذا طُلِب الإلغاء. العناصر
@@ -30,21 +38,9 @@ export async function runBatched<T>(
   batchSize = 25,
   signal?: AbortSignal
 ): Promise<BatchRunSummary> {
-  const db = getFirestore();
-  const jobRef = db.collection('syncJobs').doc();
-  const jobId = jobRef.id;
+  const jobId = randomUUID();
 
   const summary: BatchRunSummary = { jobId, total: items.length, succeeded: 0, failed: 0, errors: [], cancelled: false };
-
-  await jobRef.set({
-    jobName,
-    status: 'running',
-    total: items.length,
-    processed: 0,
-    succeeded: 0,
-    failed: 0,
-    startedAt: FieldValue.serverTimestamp(),
-  });
 
   const batches: T[][] = [];
   for (let i = 0; i < items.length; i += batchSize) {
@@ -75,20 +71,7 @@ export async function runBatched<T>(
         logger.warn('batch_item_failed', { jobName, item: keyOf(item), message });
       }
     });
-
-    await jobRef.update({
-      processed: summary.succeeded + summary.failed,
-      succeeded: summary.succeeded,
-      failed: summary.failed,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
   }
-
-  await jobRef.update({
-    status: summary.cancelled ? 'cancelled' : 'completed',
-    finishedAt: FieldValue.serverTimestamp(),
-    errors: summary.errors.slice(0, 100), // نحتفظ بعينة فقط لتفادي تضخم الوثيقة
-  });
 
   logger.info('batch_run_completed', {
     jobName,

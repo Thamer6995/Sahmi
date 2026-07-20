@@ -75,17 +75,6 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    match /apiUsage/{docId} {
-      allow read: if isSignedIn();
-      allow write: if false;
-    }
-
-    // تتبّع تقدّم عمليات المزامنة (batch processing) - قراءة فقط للوحة الإدارة
-    match /syncJobs/{jobId} {
-      allow read: if isSignedIn();
-      allow write: if false;
-    }
-
     // أي مسار غير معرف صراحة: ممنوع تمامًا
     match /{document=**} {
       allow read, write: if false;

@@ -1,10 +1,41 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { omitUndefined } from '../utils/firestoreHelpers';
+import { omitUndefined, stableEqual } from '../utils/firestoreHelpers';
 import { NormalizedRatios } from '../services/sahmk/mappers';
 
-export async function upsertRatios(ratios: NormalizedRatios): Promise<void> {
+/** الحقول الفعلية للمقارنة عند تحديد إن كانت النسب تغيّرت فعليًا (باستثناء
+ *  updatedAt وdividendYield - الأخير يُحدَّث بشكل منفصل يوميًا عبر
+ *  updateDividendYield، فلا نريد أن يمنع تغيّره وحده كتابة بقية النسب هنا
+ *  ولا العكس). rawMetrics تُقارَن بمقارنة مستقرة لا تتأثر بترتيب المفاتيح. */
+function ratiosContentEquals(a: NormalizedRatios, b: Record<string, unknown>): boolean {
+  return (
+    a.pe === b.pe &&
+    a.pb === b.pb &&
+    a.roe === b.roe &&
+    a.roa === b.roa &&
+    a.debtToEquity === b.debtToEquity &&
+    a.profitMargin === b.profitMargin &&
+    a.revenueGrowth === b.revenueGrowth &&
+    a.netIncomeGrowth === b.netIncomeGrowth &&
+    stableEqual(a.rawMetrics, b.rawMetrics)
+  );
+}
+
+export interface UpsertRatiosResult {
+  changed: boolean;
+}
+
+/** تكتب فقط إذا تغيّرت النسب فعليًا مقارنةً بما هو مخزَّن - نفس سبب التخطي
+ *  في financialsRepo.ts: تحديث أسبوعي لكل السوق بلا فحص تغيّر فعلي كان
+ *  يستهلك كتابة واحدة لكل شركة أسبوعيًا حتى لو لم تتغيّر أي قيمة. */
+export async function upsertRatios(ratios: NormalizedRatios): Promise<UpsertRatiosResult> {
   const db = getFirestore();
   const ref = db.collection('ratios').doc(ratios.symbol);
+  const existing = await ref.get();
+
+  if (existing.exists && ratiosContentEquals(ratios, existing.data() ?? {})) {
+    return { changed: false };
+  }
+
   await ref.set(
     omitUndefined({
       symbol: ratios.symbol,
@@ -22,6 +53,7 @@ export async function upsertRatios(ratios: NormalizedRatios): Promise<void> {
     }),
     { merge: true }
   );
+  return { changed: true };
 }
 
 export async function getRatios(symbol: string): Promise<NormalizedRatios | undefined> {
