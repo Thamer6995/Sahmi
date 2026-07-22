@@ -1,5 +1,5 @@
 import { SahmkCompany, SahmkQuote, SahmkFinancialsResponse, SahmkRatiosResponse, SahmkDividendEntry, SahmkOhlcvBar } from './types';
-import { pickNumber, pickString, extractPeriodKey, detectPeriodType } from './fieldPicker';
+import { pickNumber, pickString, extractPeriodKey, detectPeriodType, asRecord } from './fieldPicker';
 import { OhlcvBar } from '../../technical/types';
 
 /**
@@ -168,8 +168,10 @@ export interface NormalizedRatios {
  */
 export function normalizeRatios(symbol: string, raw: SahmkRatiosResponse): NormalizedRatios {
   const latest = raw.ratios?.[0];
-  const ratiosBlock = (latest?.ratios ?? {}) as Record<string, unknown>;
-  const keyMetrics = (latest?.key_metrics ?? {}) as Record<string, unknown>;
+  // asRecord (وليس `as Record<string, unknown>` وحده) لأن key_metrics وصل
+  // فعليًا كنص ("core") لسهم 2222 بدل كائن - راجع تعليق asRecord في fieldPicker.ts.
+  const ratiosBlock = asRecord(latest?.ratios);
+  const keyMetrics = asRecord(latest?.key_metrics);
   const combined = { ...keyMetrics, ...ratiosBlock };
 
   return {

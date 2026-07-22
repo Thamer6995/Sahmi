@@ -41,3 +41,19 @@ export function detectPeriodType(record: Record<string, unknown>): 'annual' | 'q
   if (lower.includes('annual') || lower.includes('year') || lower === 'fy') return 'annual';
   return undefined;
 }
+
+/**
+ * يتحقق فعليًا وقت التشغيل أن القيمة كائن عادي (وليس نصًا/رقمًا/مصفوفة/null)
+ * قبل التعامل معها كسجل مفاتيح-قيم - يمنع خطأً صامتًا خطيرًا: `{...قيمة}`
+ * على نص في JavaScript يفكّكه لحروف كخصائص مرقّمة بدل أن يرمي خطأً (مؤكَّد
+ * فعليًا: key_metrics في استجابة /analytics/ratios/2222/ وصل كنص "core" بدل
+ * كائن، وتحوّل صامتًا لـ {0:"c",1:"o",2:"r",3:"e"} داخل rawMetrics المخزَّن
+ * على Firestore). الكاست `as Record<string, unknown>` وحده لا يحمي من هذا
+ * لأنه فحص وقت الترجمة فقط، لا وقت التشغيل.
+ */
+export function asRecord(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
